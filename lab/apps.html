@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>drak | apps</title>
+  <meta name="description" content="Mini aplikace, prototypy a digitální nástroje." />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="page-glow"></div>
+
+  <header>
+    <nav>
+      <a class="logo" href="index.html">drak</a>
+
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="ideas.html">Ideas</a>
+        <a href="index.html#apps-preview">Apps preview</a>
+        <a href="index.html#contact">Kontakt</a>
+        <button class="theme-toggle" id="themeToggle" aria-label="Přepnout vzhled">🌙</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="subpage-hero reveal">
+      <div class="eyebrow" data-content="appsPage.eyebrow"></div>
+      <h1 data-content="appsPage.title"></h1>
+      <p data-content="appsPage.lead"></p>
+    </section>
+
+    <section class="reveal">
+      <div class="feature-grid" id="appsCatalog"></div>
+    </section>
+  </main>
+
+  <footer data-content="footer"></footer>
+
+  <script src="content.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

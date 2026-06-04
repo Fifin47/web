@@ -1,13 +1,143 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lab</title>
-  <meta name="robots" content="noindex, nofollow">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Ondřej Fila | osobní web</title>
+  <meta name="description" content="Osobní web, portfolio, storage nápadů a mini aplikace." />
+
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-  <h1>Lab funguje</h1>
-  <p>Toto je neveřejně propagovaná pracovní cesta.</p>
+  <div class="page-glow"></div>
+
+  <header>
+    <nav>
+      <a class="logo" href="index.html">Ondřej Fila</a>
+
+      <div class="nav-links">
+        <a href="#about">O mně</a>
+        <a href="#ideas-preview">Ideas</a>
+        <a href="#apps-preview">Apps</a>
+        <a href="#contact">Kontakt</a>
+        <button class="theme-toggle" id="themeToggle" aria-label="Přepnout vzhled">🌙</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero reveal">
+      <div class="hero-copy">
+        <div class="eyebrow" data-content="hero.eyebrow"></div>
+        <h1 data-content="hero.title"></h1>
+        <p data-content="hero.text"></p>
+
+        <div class="actions">
+          <a href="#apps-preview" class="button primary" data-content="hero.primaryButton"></a>
+          <a href="#ideas-preview" class="button secondary" data-content="hero.secondaryButton"></a>
+        </div>
+      </div>
+
+      <aside class="hero-panel">
+        <div class="avatar">
+          <img
+            src="media/profile.webp"
+            alt="Drak"
+            class="avatar-image"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+          >
+          <div class="avatar-fallback" data-content="profile.initial"></div>
+        </div>
+        <div class="panel-meta">
+          <span data-content="profile.metaLeft"></span>
+          <span data-content="profile.metaRight"></span>
+        </div>
+        <h2 data-content="profile.title"></h2>
+        <p data-content="profile.text"></p>
+      </aside>
+    </section>
+
+    <section id="about" class="reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow" data-content="concept.eyebrow"></div>
+          <h2 class="section-title section-title-readable" data-html="concept.title"></h2>
+        </div>
+        <p class="section-lead" data-content="concept.lead"></p>
+      </div>
+
+      <div class="adaptive-tiles" id="conceptTiles"></div>
+    </section>
+
+    <section id="ideas-preview" class="reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow" data-content="ideasPreview.eyebrow"></div>
+          <h2 class="section-title" data-content="ideasPreview.title"></h2>
+        </div>
+        <p class="section-lead" data-content="ideasPreview.lead"></p>
+      </div>
+
+      <div class="carousel-shell">
+        <div class="carousel" id="ideasCarousel" aria-label="Náhled nápadů"></div>
+
+        <div class="carousel-actions">
+          <a href="ideas.html" class="button primary" data-content="ideasPreview.button"></a>
+        </div>
+      </div>
+    </section>
+
+    <section id="apps-preview" class="reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow" data-content="appsPreview.eyebrow"></div>
+          <h2 class="section-title" data-content="appsPreview.title"></h2>
+        </div>
+        <p class="section-lead" data-content="appsPreview.lead"></p>
+      </div>
+
+      <div class="product-showcase">
+        <a href="apps.html" class="showcase-card main link-card" id="mainAppCard"></a>
+        <div class="showcase-stack" id="sideAppCards"></div>
+      </div>
+    </section>
+
+    <section class="reveal">
+      <div class="split-section">
+        <div>
+          <div class="eyebrow" data-content="nextStep.eyebrow"></div>
+          <h2 class="section-title" data-content="nextStep.title"></h2>
+        </div>
+
+        <div class="glass-copy" id="nextStepParagraphs"></div>
+      </div>
+    </section>
+
+    <section class="reveal">
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <section id="contact" class="reveal">
+      <div class="cta-box">
+        <div class="cta-copy">
+          <div class="eyebrow" data-content="contact.eyebrow"></div>
+          <h2 class="cta-title" data-content="contact.title"></h2>
+          <p class="cta-lead" data-content="contact.lead"></p>
+        </div>
+
+        <div class="contact-links">
+          <a id="emailLink" class="button primary"></a>
+          <a id="linkedinLink" class="button secondary" target="_blank" rel="noopener noreferrer"></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer data-content="footer"></footer>
+
+  <script src="content.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
