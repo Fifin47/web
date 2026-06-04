@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rodinný strom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <style>
+    /* ── DESIGN SYSTÉM ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #f5f2ed;
+      --ink:       #1a1714;
+      --muted:     #6b6560;
+      --faint:     #b8b2ab;
+      --accent:    #c84b2f;
+      --surface:   #eceae4;
+      --border:    #d8d3cc;
+      --node-bg:   #faf8f5;
+      --col-m:     #3d7ab0;   /* barva pruhu – muž  */
+      --col-f:     #b84a30;   /* barva pruhu – žena */
+      --link-sp:   #a08858;   /* barva – manžel/ka  */
+      --link-div:  #9a7060;   /* barva – rozvedení  */
+      --link-par:  #7a6040;   /* barva – rodič-dítě */
+      --serif:     'DM Serif Display', Georgia, serif;
+      --mono:      'DM Mono', monospace;
+      --sans:      'DM Sans', sans-serif;
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: var(--bg); color: var(--ink); font-family: var(--sans); display: flex; flex-direction: column; }
+
+    /* ── NAVIGACE ───────────────────────────────────────────────── */
+    nav {
+      height: 52px; flex-shrink: 0;
+      padding: 0 2rem; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border); background: var(--bg); z-index: 20;
+    }
+    .nav-back { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-decoration: none; display: flex; align-items: center; gap: .5rem; transition: color .2s; }
+    .nav-back:hover { color: var(--accent); }
+    .nav-title { font-family: var(--serif); font-size: 1.1rem; letter-spacing: .01em; }
+    .nav-hint  { font-family: var(--mono); font-size: .58rem; color: var(--faint); letter-spacing: .06em; }
+
+    /* ── LAYOUT ─────────────────────────────────────────────────── */
+    .layout { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+    /* ── CANVAS ─────────────────────────────────────────────────── */
+    #canvas {
+      flex: 1; overflow: hidden; position: relative;
+      background-color: #f6f2ec;
+      background-image: radial-gradient(circle, rgba(160,144,124,.22) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+    #canvas svg { width: 100%; height: 100%; display: block; }
+
+    /* ── ZOOM CONTROLS ──────────────────────────────────────────── */
+    .zoom-ctrl { position: absolute; bottom: 1.5rem; left: 1.5rem; display: flex; flex-direction: column; gap: 2px; z-index: 10; }
+    .zc-btn {
+      width: 32px; height: 32px;
+      background: rgba(250,248,245,.95); border: 1px solid var(--border);
+      color: var(--muted); font-size: .9rem;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background .18s, color .18s, border-color .18s;
+      backdrop-filter: blur(8px);
+    }
+    .zc-btn:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .zc-btn:first-child { border-radius: 4px 4px 0 0; }
+    .zc-btn:last-child  { border-radius: 0 0 4px 4px; }
+
+    /* ── LEGENDA ────────────────────────────────────────────────── */
+    #legend {
+      position: absolute; bottom: 1.5rem; right: 1.5rem;
+      background: rgba(250,248,245,.97); border: 1px solid var(--border);
+      border-radius: 4px; z-index: 10; min-width: 210px; backdrop-filter: blur(10px);
+      box-shadow: 0 2px 12px rgba(26,23,20,.07);
+    }
+    .leg-hdr { padding: .5rem .9rem; font-family: var(--mono); font-size: .61rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; border-radius: 4px; }
+    .leg-hdr:hover { background: var(--surface); }
+    .leg-body { padding: .5rem .9rem .75rem; display: flex; flex-direction: column; gap: .38rem; border-top: 1px solid var(--border); }
+    .leg-body.closed { display: none; }
+    .leg-sec  { font-family: var(--mono); font-size: .54rem; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-top: .25rem; }
+    .leg-row  { display: flex; align-items: center; gap: .6rem; }
+    .leg-lbl  { font-family: var(--mono); font-size: .61rem; color: var(--muted); }
+
+    /* ── UZLY (SVG třídy) ───────────────────────────────────────── */
+    .node       { cursor: pointer; }
+    .node-bg    { fill: var(--node-bg); stroke: var(--border); stroke-width: 1; rx: 3;
+                  filter: drop-shadow(0 1px 6px rgba(26,23,20,.08));
+                  transition: stroke .16s, fill .16s, filter .16s; }
+    .node:hover .node-bg { stroke: var(--link-par); fill: #fff; filter: drop-shadow(0 3px 12px rgba(26,23,20,.14)); }
+    .node.dead  .node-bg { stroke-dasharray: 5 3; opacity: .7; }
+    .node.active .node-bg { fill: var(--ink); stroke: var(--ink); filter: drop-shadow(0 3px 14px rgba(26,23,20,.22)); }
+    .node.active .nd-name, .node.active .nd-years { fill: rgba(245,242,237,.92) !important; }
+    .node.active .nd-bar { opacity: .35 !important; }
+    .nd-bar   { pointer-events: none; }
+    .nd-name  { font-family: var(--serif); font-size: 13px; fill: var(--ink); pointer-events: none; }
+    .nd-years { font-family: var(--mono);  font-size: 9.5px; fill: var(--muted); pointer-events: none; letter-spacing: .02em; }
+    .nd-pring { fill: none; stroke: var(--border); stroke-width: 1; pointer-events: none; }
+    .node.active .nd-pring { stroke: rgba(245,242,237,.3); }
+
+    /* ── GENERAČNÍ POPISKY ──────────────────────────────────────── */
+    .gen-lbl { font-family: var(--mono); font-size: 9.5px; fill: var(--faint); letter-spacing: .16em; text-transform: uppercase; pointer-events: none; }
+
+    /* ── SPOJNICE (SVG třídy) ───────────────────────────────────── */
+    .lnk-spouse   { stroke: var(--link-sp);  fill: none; stroke-width: 1.6; stroke-linecap: round; }
+    .lnk-partner  { stroke: var(--link-sp);  fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 6 4; }
+    .lnk-divorced { stroke: var(--link-div); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 4 4; }
+    .lnk-cross    { stroke: var(--link-div); stroke-width: 1.8; stroke-linecap: round; }
+    .lnk-parent   { stroke: var(--link-par); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── PANEL ──────────────────────────────────────────────────── */
+    #panel {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 320px;
+      border-left: 1px solid var(--border); background: var(--bg);
+      display: flex; flex-direction: column;
+      transform: translateX(320px); transition: transform .3s cubic-bezier(.4,0,.2,1);
+      overflow-y: auto; z-index: 15; box-shadow: -6px 0 28px rgba(26,23,20,.07);
+    }
+    #panel.open { transform: translateX(0); }
+    .p-close-bar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: flex-end; padding: .6rem .6rem 0; background: var(--bg); }
+    .p-close-btn { width: 26px; height: 26px; border: 1px solid var(--border); background: transparent; cursor: pointer; font-size: .7rem; color: var(--faint); border-radius: 3px; display: flex; align-items: center; justify-content: center; transition: background .18s, color .18s; }
+    .p-close-btn:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .p-photo-wrap { margin: 0 1.5rem 1.1rem; position: relative; }
+    .p-photo-img  { width: 100%; height: 175px; object-fit: cover; display: block; border: 1px solid var(--border); }
+    .p-photo-ph   { width: 100%; height: 175px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 4rem; color: var(--faint); letter-spacing: -.02em; }
+    .p-photo-btn  { position: absolute; bottom: .5rem; right: .5rem; background: rgba(26,23,20,.68); color: #f5f2ed; font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; padding: .35rem .65rem; cursor: pointer; border: none; transition: background .18s; }
+    .p-photo-btn:hover { background: var(--accent); }
+    #p-photo-file { display: none; }
+    .p-hdr     { padding: 0 1.5rem 1.1rem; border-bottom: 1px solid var(--border); }
+    .p-gen     { font-family: var(--mono); font-size: .6rem; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin-bottom: .35rem; }
+    .p-name    { font-family: var(--serif); font-size: 1.5rem; line-height: 1.15; margin-bottom: .15rem; }
+    .p-maiden  { font-size: .8rem; color: var(--muted); font-style: italic; }
+    .p-fields  { padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--border); }
+    .p-field   { padding: .55rem 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: .18rem; }
+    .p-field:last-child { border-bottom: none; }
+    .p-flbl    { font-family: var(--mono); font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+    .p-fval    { font-size: .88rem; color: var(--ink); line-height: 1.55; }
+    .p-badge   { display: inline-block; font-family: var(--mono); font-size: .56rem; letter-spacing: .06em; padding: .1rem .32rem; border: 1px solid var(--border); color: var(--muted); margin-left: .3rem; vertical-align: middle; border-radius: 2px; }
+    .p-badge.sp  { border-color: var(--link-sp);  color: var(--link-sp);  }
+    .p-badge.div { border-color: var(--link-div); color: var(--link-div); }
+    .p-badge.bio { border-color: var(--link-par); color: var(--link-par); }
+    .p-bio     { padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--border); }
+    .p-bio-lbl { font-family: var(--mono); font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin-bottom: .55rem; }
+    .p-bio-txt { font-size: .88rem; color: var(--muted); line-height: 1.8; font-weight: 300; white-space: pre-wrap; }
+    .p-note    { padding: .9rem 1.5rem 1.5rem; font-size: .8rem; color: var(--muted); line-height: 1.65; font-style: italic; }
+    .p-hint    { margin: .5rem 1.5rem; padding: .65rem; background: var(--surface); border: 1px solid var(--border); font-family: var(--mono); font-size: .58rem; color: var(--muted); line-height: 1.6; display: none; }
+    .p-hint code { display: block; margin-top: .3rem; background: var(--ink); color: var(--bg); padding: .32rem .5rem; word-break: break-all; cursor: pointer; border-radius: 2px; }
+
+    /* ── EDIT BUTTON ────────────────────────────────────────────── */
+    .p-edit-bar { padding: .75rem 1.5rem 1.5rem; }
+    .p-edit-btn { width: 100%; padding: .55rem; background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: background .18s, color .18s, border-color .18s; border-radius: 3px; }
+    .p-edit-btn:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+    /* ── EDIT FORM ──────────────────────────────────────────────── */
+    .ef-fields   { padding: .75rem 1.5rem; display: flex; flex-direction: column; gap: .1rem; }
+    .ef-field    { padding: .55rem 0; border-bottom: 1px solid var(--border); }
+    .ef-field:last-child { border-bottom: none; }
+    .ef-row      { display: flex; gap: 1rem; border-bottom: 1px solid var(--border); }
+    .ef-row.ef-field { padding: .55rem 0; }
+    .ef-field-half { flex: 1; display: flex; flex-direction: column; gap: .25rem; }
+    .ef-lbl      { font-family: var(--mono); font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); display: block; margin-bottom: .3rem; }
+    .ef-inp      { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--ink); font-family: var(--sans); font-size: .85rem; padding: .4rem .55rem; outline: none; transition: border-color .18s; border-radius: 2px; }
+    .ef-inp:focus { border-color: var(--ink); background: #fff; }
+    .ef-inp.err  { border-color: var(--accent); }
+    .ef-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+    .ef-err      { font-family: var(--mono); font-size: .58rem; color: var(--accent); margin-top: .2rem; min-height: .9rem; }
+    .ef-radio-group { display: flex; gap: 1.2rem; padding: .2rem 0; }
+    .ef-radio    { font-size: .82rem; color: var(--muted); display: flex; align-items: center; gap: .35rem; cursor: pointer; }
+    .ef-radio input { accent-color: var(--ink); cursor: pointer; }
+    .ef-actions  { padding: .75rem 1.5rem 1.75rem; display: flex; gap: .6rem; }
+    .ef-btn-save   { flex: 1; padding: .55rem; background: var(--ink); color: var(--bg); border: 1px solid var(--ink); font-family: var(--mono); font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: background .18s; border-radius: 3px; }
+    .ef-btn-save:hover   { background: #000; }
+    .ef-btn-cancel { flex: 1; padding: .55rem; background: transparent; color: var(--muted); border: 1px solid var(--border); font-family: var(--mono); font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; transition: background .18s, color .18s; border-radius: 3px; }
+    .ef-btn-cancel:hover { background: var(--surface); color: var(--ink); }
+
+    /* ── VALIDAČNÍ BANNER ───────────────────────────────────────── */
+    #val-banner { display: none; position: fixed; top: 52px; left: 0; right: 0; background: #b03020; color: #fff; padding: .65rem 1.5rem; font-family: var(--mono); font-size: .7rem; z-index: 100; line-height: 1.6; }
+    #val-banner ul { margin: .3rem 0 0 1rem; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-back">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Zpět
+  </a>
+  <span class="nav-title">Rodinný strom</span>
+  <span class="nav-hint">Scroll = zoom · Tah = posun · Klik = detail</span>
+</nav>
+
+<div id="val-banner"></div>
+
+<div class="layout">
+  <div id="canvas">
+    <svg id="svg"><g id="zG"></g></svg>
+    <div class="zoom-ctrl">
+      <button class="zc-btn" id="zcIn">+</button>
+      <button class="zc-btn" id="zcOut">−</button>
+      <button class="zc-btn" id="zcFit" style="font-size:.72rem;">⊡</button>
+      <button class="zc-btn" id="zcExport" style="font-size:.72rem;" title="Exportovat data jako JSON">↓</button>
+      <button class="zc-btn" id="zcImport" style="font-size:.72rem;" title="Importovat data ze JSON souboru">↑</button>
+    </div>
+    <input type="file" accept=".json,application/json" id="io-file-input" style="display:none"/>
+    <div id="legend">
+      <div class="leg-hdr" id="legTgl">Legenda <span id="legArr">▾</span></div>
+      <div class="leg-body" id="legBody"></div>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <div class="p-close-bar"><button class="p-close-btn" id="pClose">✕</button></div>
+    <div class="p-photo-wrap">
+      <div class="p-photo-ph" id="pPhotoPh">?</div>
+      <img class="p-photo-img" id="pPhotoImg" style="display:none" alt=""/>
+      <button class="p-photo-btn" id="pPhotoBtn">📷 Nahrát foto</button>
+      <input type="file" accept="image/*" id="p-photo-file"/>
+    </div>
+    <div class="p-hint" id="pHint">
+      Pro trvalé uložení zkopíruj base64 do pole <em>photo</em> v FAMILY_DATA.people:
+      <code id="pHintCode"></code>
+    </div>
+    <div class="p-hdr">
+      <div class="p-gen"   id="pGen"></div>
+      <div class="p-name"  id="pName"></div>
+      <div class="p-maiden" id="pMaiden"></div>
+    </div>
+    <div class="p-fields" id="pFields"></div>
+    <div class="p-bio"    id="pBio" style="display:none">
+      <div class="p-bio-lbl">Životopis</div>
+      <div class="p-bio-txt" id="pBioTxt"></div>
+    </div>
+    <div class="p-note" id="pNote" style="display:none"></div>
+    <div class="p-edit-bar"><button class="p-edit-btn" id="pEdit">Upravit</button></div>
+
+    <!-- ── EDIT FORM ─────────────────────────────────────────── -->
+    <div id="pEditForm" style="display:none">
+      <div class="ef-fields">
+        <div class="ef-field">
+          <label class="ef-lbl" for="ef-name">Jméno *</label>
+          <input class="ef-inp" id="ef-name" type="text" autocomplete="off"/>
+          <div class="ef-err" id="ef-name-err"></div>
+        </div>
+        <div class="ef-field ef-row">
+          <div class="ef-field-half">
+            <label class="ef-lbl" for="ef-born">Rok narození</label>
+            <input class="ef-inp" id="ef-born" type="number" min="1000" max="2100" placeholder="např. 1970"/>
+            <div class="ef-err" id="ef-born-err"></div>
+          </div>
+          <div class="ef-field-half">
+            <label class="ef-lbl" for="ef-died">Rok úmrtí</label>
+            <input class="ef-inp" id="ef-died" type="number" min="1000" max="2100" placeholder="prázdné = žije"/>
+            <div class="ef-err" id="ef-died-err"></div>
+          </div>
+        </div>
+        <div class="ef-field">
+          <label class="ef-lbl">Pohlaví</label>
+          <div class="ef-radio-group">
+            <label class="ef-radio"><input type="radio" name="ef-gender" value="m"/> Muž</label>
+            <label class="ef-radio"><input type="radio" name="ef-gender" value="f"/> Žena</label>
+            <label class="ef-radio"><input type="radio" name="ef-gender" value=""/> Neuvedeno</label>
+          </div>
+        </div>
+        <div class="ef-field">
+          <label class="ef-lbl" for="ef-maiden">Rodné příjmení</label>
+          <input class="ef-inp" id="ef-maiden" type="text" autocomplete="off"/>
+        </div>
+        <div class="ef-field">
+          <label class="ef-lbl" for="ef-birthplace">Místo narození</label>
+          <input class="ef-inp" id="ef-birthplace" type="text" autocomplete="off"/>
+        </div>
+        <div class="ef-field">
+          <label class="ef-lbl" for="ef-occupation">Povolání</label>
+          <input class="ef-inp" id="ef-occupation" type="text" autocomplete="off"/>
+        </div>
+        <div class="ef-field">
+          <label class="ef-lbl" for="ef-bio">Životopis</label>
+          <textarea class="ef-inp ef-textarea" id="ef-bio" rows="4"></textarea>
+        </div>
+        <div class="ef-field">
+          <label class="ef-lbl" for="ef-note">Poznámka</label>
+          <input class="ef-inp" id="ef-note" type="text" autocomplete="off"/>
+        </div>
+      </div>
+      <div class="ef-actions">
+        <button class="ef-btn-save" id="efSave">Uložit</button>
+        <button class="ef-btn-cancel" id="efCancel">Zrušit</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  DATOVÁ VRSTVA                                                        ║
+// ║                                                                       ║
+// ║  Poskytuje: initDB, savePerson, saveFamily, deletePerson,             ║
+// ║             exportData, importData, persist                           ║
+// ║                                                                       ║
+// ║  Po initDB() jsou synchronně dostupné: FAMILY_DATA, PM, FM           ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+
+// ── Výchozí (hardcoded) data ─────────────────────────────────────────
+const _DEFAULT_DATA = {
+  rootFamilyId: "f1",
+  people: [
+    { id:"p13", name:"Emílie Nováková",    born:1940, gender:"f", maiden:"Horáková",    birthplace:"Brno",    occupation:"Zahradnice" },
+    { id:"p14", name:"Jan Novák st.",      born:1939, gender:"m",                       birthplace:"Brno",    occupation:"Tesař",      note:"Zakladatel brněnské větve." },
+    { id:"p16", name:"Lojzička Svobodová", born:1936, gender:"f", maiden:"Dvořáčková",  birthplace:"Olomouc", occupation:"Švadlena",   died:2010 },
+    { id:"p17", name:"František Svoboda",  born:1940, gender:"m",                       birthplace:"Olomouc", occupation:"Účetní",     died:2008 },
+    { id:"p1",  name:"Jan Novák",          born:1970, gender:"m", birthplace:"Brno",    occupation:"Projektant" },
+    { id:"p2",  name:"Marie Nováková",     born:1972, gender:"f", maiden:"Svobodová",   birthplace:"Olomouc", occupation:"Učitelka" },
+    { id:"p22", name:"Tereza Malá",        born:1974, gender:"f", maiden:"Nováková",    birthplace:"Brno",    occupation:"Lékařka",    note:"Sestra Jana Nováka." },
+    { id:"p3",  name:"Petr Novák",         born:1995, gender:"m", birthplace:"Brno",    occupation:"Student" },
+    { id:"p4",  name:"Lucie Nováková",     born:1998, gender:"f", birthplace:"Brno",    occupation:"Grafička" },
+    { id:"p5",  name:"Martin Novák",       born:1997, gender:"m", birthplace:"Brno",    occupation:"Architekt" },
+    { id:"p6",  name:"Lucie Visine",       born:1997, gender:"f", maiden:"Visine",      birthplace:"Praha",   occupation:"Ekonomka" },
+    { id:"p8",  name:"Sandra Nováková",    born:1999, gender:"f", maiden:"Horáková",    birthplace:"Plzeň",   occupation:"Zdravotní sestra" },
+    { id:"p12", name:"Jarmil Novák",       born:1996, gender:"m", birthplace:"Ostrava", occupation:"Inženýr" },
+    { id:"p18", name:"Markéta Nováková",   born:1997, gender:"f", maiden:"Procházková", birthplace:"Brno",    occupation:"Právnička" },
+    { id:"p20", name:"Petra Nováková",     born:1998, gender:"f", maiden:"Blahová",     birthplace:"Brno",    occupation:"Lékárnice" },
+    { id:"p7",  name:"Jakub Novák",        born:2024, gender:"m", birthplace:"Praha" },
+    { id:"p9",  name:"Adéla Nováková",     born:2020, gender:"f", birthplace:"Brno" },
+    { id:"p10", name:"Ondřej Novák",       born:2022, gender:"m", birthplace:"Brno",    bio:"Data engineer. Správce tohoto rodostromu." },
+    { id:"p11", name:"Karolína Nováková",  born:2025, gender:"f", birthplace:"Brno" },
+    { id:"p15", name:"Eva Novák",          born:2026, gender:"f", birthplace:"Praha" },
+    { id:"p19", name:"Tomáš Novák",        born:2027, gender:"m", birthplace:"Brno" },
+    { id:"p21", name:"Josefa Nováková",    born:2027, gender:"f", birthplace:"Brno" },
+  ],
+  families: [
+    { id:"f0",  partners:["p14","p13"], relation:"spouse",   since:1968,             children:["p1","p22"] },
+    { id:"f00", partners:["p17","p16"], relation:"spouse",   since:1964,             children:["p2"] },
+    { id:"f1",  partners:["p1","p2"],   relation:"spouse",   since:1994,             children:["p3","p5","p4"] },
+    { id:"f2",  partners:["p3","p6"],   relation:"divorced", since:2020, until:2022, children:["p7"] },
+    { id:"f3",  partners:["p5","p8"],   relation:"spouse",   since:2023,             children:["p9","p10","p11"] },
+    { id:"f4",  partners:["p4","p12"],  relation:"spouse",   since:2022,             children:[] },
+    { id:"f6",  partners:["p3","p18"],  relation:"divorced", since:2023, until:2024, children:["p19"] },
+    { id:"f7",  partners:["p3","p20"],  relation:"spouse",   since:2025,             children:["p21"] },
+    { id:"f5",  partners:["p7","p15"],  relation:"partner",                          children:[] },
+  ],
+};
+
+// ── Veřejné in-memory datové struktury (čteny přímo layout enginem) ──
+let FAMILY_DATA = { rootFamilyId: "", people: [], families: [] };
+const PM = {};   // personMap: id → person
+const FM = {};   // familyMap: id → family
+
+// ── Interní: přestav PM + FM z aktuálního FAMILY_DATA ─────────────────
+function _rebuildMaps() {
+  // Vyprázdni objekty in-place (zachovej reference které layout engine drží)
+  for (const k in PM) delete PM[k];
+  for (const k in FM) delete FM[k];
+  FAMILY_DATA.people.forEach(p   => PM[p.id] = p);
+  FAMILY_DATA.families.forEach(f => FM[f.id] = f);
+}
+
+// ── Validace ──────────────────────────────────────────────────────────
+/**
+ * Validuje datový objekt { rootFamilyId, people, families }.
+ * Pokud není předán, validuje aktuální FAMILY_DATA.
+ * Vrací { errors: string[], warnings: string[] }.
+ */
+function validateData(data) {
+  data = data || FAMILY_DATA;
+  const errors   = [];
+  const warnings = [];
+
+  // Unikátnost ID osob
+  const personIds = new Set();
+  for (const p of data.people) {
+    if (!p.id)   { errors.push(`Osoba bez id.`); continue; }
+    if (!p.name) { errors.push(`Osoba "${p.id}" nemá jméno.`); }
+    if (personIds.has(p.id)) { errors.push(`Duplicitní person.id "${p.id}".`); }
+    personIds.add(p.id);
+    if (p.gender && p.gender !== 'm' && p.gender !== 'f') {
+      warnings.push(`Osoba "${p.id}" má neplatné pohlaví "${p.gender}" (povoleno: m, f).`);
+    }
+    if (p.born != null && (p.born < 1000 || p.born > 2100)) {
+      warnings.push(`Osoba "${p.id}": rok narození ${p.born} je mimo rozsah 1000–2100.`);
+    }
+    if (p.died != null && (p.died < 1000 || p.died > 2100)) {
+      warnings.push(`Osoba "${p.id}": rok úmrtí ${p.died} je mimo rozsah 1000–2100.`);
+    }
+    if (p.born != null && p.died != null && p.died < p.born) {
+      errors.push(`Osoba "${p.id}" (${p.name}): rok úmrtí (${p.died}) je před narozením (${p.born}).`);
+    }
+    if (p.photo_key && !localStorage.getItem(p.photo_key)) {
+      warnings.push(`Osoba "${p.id}" má photo_key "${p.photo_key}", ale foto chybí v localStorage.`);
+    }
+  }
+
+  // Unikátnost ID rodin + vazby
+  const familyIds = new Set();
+  const childCount = {};
+  for (const f of data.families) {
+    if (!f.id) { errors.push(`Rodina bez id.`); continue; }
+    if (familyIds.has(f.id)) { errors.push(`Duplicitní family.id "${f.id}".`); }
+    familyIds.add(f.id);
+
+    if (!f.partners || f.partners.length === 0) {
+      errors.push(`Rodina "${f.id}" nemá žádné partnery.`);
+    } else if (f.partners.length > 2) {
+      errors.push(`Rodina "${f.id}" má ${f.partners.length} partnery – povoleno max 2.`);
+    }
+
+    for (const pid of [...(f.partners || []), ...(f.children || [])]) {
+      if (!personIds.has(pid)) {
+        errors.push(`Osoba "${pid}" v rodině "${f.id}" chybí v people[].`);
+      }
+    }
+    for (const cid of f.children || []) {
+      childCount[cid] = (childCount[cid] || 0) + 1;
+    }
+
+    if (f.since != null && f.until != null && f.since > f.until) {
+      warnings.push(`Rodina "${f.id}": since (${f.since}) > until (${f.until}).`);
+    }
+    if (f.relation && !['spouse','partner','divorced'].includes(f.relation)) {
+      warnings.push(`Rodina "${f.id}": neznámý typ vztahu "${f.relation}".`);
+    }
+  }
+
+  // rootFamilyId
+  if (!familyIds.has(data.rootFamilyId)) {
+    errors.push(`rootFamilyId "${data.rootFamilyId}" neexistuje v families[].`);
+  }
+
+  // Osoba dítětem ve více rodinách
+  for (const [cid, cnt] of Object.entries(childCount)) {
+    if (cnt > 1) {
+      const name = data.people.find(p => p.id === cid)?.name || cid;
+      warnings.push(`Osoba "${cid}" (${name}) je dítětem v ${cnt} rodinách.`);
+    }
+  }
+
+  // Osoba není v žádné rodině
+  const inAnyFamily = new Set(
+    data.families.flatMap(f => [...(f.partners || []), ...(f.children || [])])
+  );
+  for (const p of data.people) {
+    if (!inAnyFamily.has(p.id)) {
+      warnings.push(`Osoba "${p.id}" (${p.name}) není v žádné rodině – nevykreslí se.`);
+    }
+  }
+
+  return { errors, warnings };
+}
+
+// ── Persistence ───────────────────────────────────────────────────────
+/** Serializuje FAMILY_DATA do localStorage (bez foto blobů). */
+function persist() {
+  localStorage.setItem('rodokmen-data', JSON.stringify({
+    rootFamilyId: FAMILY_DATA.rootFamilyId,
+    people:       FAMILY_DATA.people,
+    families:     FAMILY_DATA.families,
+  }));
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+/**
+ * Načte data z localStorage (nebo použije výchozí dataset).
+ * Sestaví FAMILY_DATA, PM, FM. Synchronní.
+ */
+function initDB() {
+  const saved = localStorage.getItem('rodokmen-data');
+  let data;
+  if (saved) {
+    try { data = JSON.parse(saved); }
+    catch { localStorage.removeItem('rodokmen-data'); data = _DEFAULT_DATA; }
+  } else {
+    data = _DEFAULT_DATA;
+  }
+  FAMILY_DATA.rootFamilyId = data.rootFamilyId;
+  FAMILY_DATA.people       = data.people   || [];
+  FAMILY_DATA.families     = data.families || [];
+  _rebuildMaps();
+}
+
+// ── Zápis osoby ───────────────────────────────────────────────────────
+/**
+ * Uloží (upsert) osobu do FAMILY_DATA + PM + persistuje.
+ * @param {Object} personObj – objekt s polem id (povinné)
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+function savePerson(personObj) {
+  const idx = FAMILY_DATA.people.findIndex(p => p.id === personObj.id);
+  const previous = idx >= 0 ? FAMILY_DATA.people[idx] : null;
+
+  if (idx >= 0) {
+    FAMILY_DATA.people[idx] = personObj;
+  } else {
+    FAMILY_DATA.people.push(personObj);
+  }
+  _rebuildMaps();
+
+  const { errors, warnings } = validateData();
+  if (errors.length > 0) {
+    // Rollback
+    if (previous) { FAMILY_DATA.people[idx] = previous; }
+    else          { FAMILY_DATA.people.pop(); }
+    _rebuildMaps();
+    return { ok: false, errors, warnings };
+  }
+  persist();
+  return { ok: true, errors: [], warnings };
+}
+
+// ── Zápis rodiny ─────────────────────────────────────────────────────
+/**
+ * Uloží (upsert) rodinu do FAMILY_DATA + FM + persistuje.
+ * @param {Object} familyObj – objekt s polem id (povinné)
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+function saveFamily(familyObj) {
+  if (!familyObj.partners || familyObj.partners.length === 0) {
+    return { ok: false, errors: [`Rodina "${familyObj.id}" musí mít alespoň jednoho partnera.`], warnings: [] };
+  }
+  const idx = FAMILY_DATA.families.findIndex(f => f.id === familyObj.id);
+  if (idx >= 0) {
+    FAMILY_DATA.families[idx] = familyObj;
+  } else {
+    FAMILY_DATA.families.push(familyObj);
+  }
+  _rebuildMaps();
+  const { errors, warnings } = validateData();
+  if (errors.length === 0) persist();
+  return { ok: errors.length === 0, errors, warnings };
+}
+
+// ── Smazání osoby ─────────────────────────────────────────────────────
+/**
+ * Smaže osobu z people[] a vyčistí ji z partners[] a children[] ve všech rodinách.
+ * Rodiny bez partnerů po smazání jsou také odstraněny.
+ * @param {string} personId
+ * @returns {{ ok: boolean, errors: string[], warnings: string[], removedFamilies: string[] }}
+ */
+function deletePerson(personId) {
+  if (!PM[personId]) {
+    return { ok: false, errors: [`Osoba "${personId}" neexistuje.`], warnings: [], removedFamilies: [] };
+  }
+
+  // Odeber z people[]
+  FAMILY_DATA.people = FAMILY_DATA.people.filter(p => p.id !== personId);
+
+  // Odeber z foto localStorage
+  const photoKey = PM[personId]?.photo_key;
+  if (photoKey) localStorage.removeItem(photoKey);
+  // Starý formát fp_* pro zpětnou kompatibilitu
+  localStorage.removeItem(`fp_${personId}`);
+
+  // Vyčisti z rodin, odeber rodiny bez partnerů
+  const removedFamilies = [];
+  FAMILY_DATA.families = FAMILY_DATA.families.filter(f => {
+    f.partners = (f.partners || []).filter(id => id !== personId);
+    f.children = (f.children || []).filter(id => id !== personId);
+    if (f.partners.length === 0) {
+      removedFamilies.push(f.id);
+      return false;
+    }
+    return true;
+  });
+
+  _rebuildMaps();
+  const { errors, warnings } = validateData();
+  if (errors.length === 0) persist();
+  return { ok: errors.length === 0, errors, warnings, removedFamilies };
+}
+
+// ── Export ────────────────────────────────────────────────────────────
+/**
+ * Vrátí JSON string se všemi daty včetně foto blobů (pro stažení).
+ * @returns {string}
+ */
+function exportData_db() {
+  const people = FAMILY_DATA.people.map(p => {
+    const photoKey = p.photo_key || `fp_${p.id}`;
+    const photo = localStorage.getItem(photoKey) || undefined;
+    return photo ? { ...p, photo } : { ...p };
+  });
+  return JSON.stringify({
+    rootFamilyId: FAMILY_DATA.rootFamilyId,
+    people,
+    families: FAMILY_DATA.families,
+  }, null, 2);
+}
+
+// ── Import ────────────────────────────────────────────────────────────
+/**
+ * Destruktivně nahradí všechna data. Validuje před zápisem.
+ * Fotky z importovaného JSON přesouvá do localStorage.
+ * @param {string} jsonString
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+function importData_db(jsonString) {
+  let parsed;
+  try { parsed = JSON.parse(jsonString); }
+  catch { return { ok: false, errors: ['Soubor není platný JSON.'], warnings: [] }; }
+
+  // Normalizace: vyjmi foto z people[] před validací
+  const people = (parsed.people || []).map(p => {
+    if (p.photo) {
+      const key = p.photo_key || `fp_${p.id}`;
+      localStorage.setItem(key, p.photo);
+      const { photo, ...rest } = p;
+      return { ...rest, photo_key: key };
+    }
+    return p;
+  });
+  const candidate = { rootFamilyId: parsed.rootFamilyId, people, families: parsed.families || [] };
+
+  const { errors, warnings } = validateData(candidate);
+  if (errors.length > 0) {
+    return { ok: false, errors, warnings };
+  }
+
+  FAMILY_DATA.rootFamilyId = candidate.rootFamilyId;
+  FAMILY_DATA.people       = candidate.people;
+  FAMILY_DATA.families     = candidate.families;
+  _rebuildMaps();
+  persist();
+  return { ok: true, errors: [], warnings };
+}
+</script>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  KONFIGURACE LAYOUTU                                                  ║
+// ║  Změnou těchto hodnot lze upravit vizuální rozvržení stromu.          ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+const CFG = {
+  NODE_W:          180,   // šířka uzlu [px]
+  NODE_H:           68,   // výška uzlu [px]
+  PARTNER_GAP:      44,   // mezera uvnitř páru [px]
+  CHILD_GAP:        72,   // mezera mezi dětskými sloty [px]
+  GEN_GAP:         150,   // výška generace – svislý rozestup [px]
+  PAD:              80,   // okraj stromu [px]
+  MIN_GAP:              12,   // minimální anti-collision mezera [px]
+  PARENT_BUS_STAGGER:   10,   // offset parent busu při křížení [px]
+  ROMAN: ['I','II','III','IV','V','VI','VII','VIII','IX','X'],
+};
+
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  RODINNÁ DATA                                                         ║
+// ║                                                                       ║
+// ║  Data jsou spravována datovou vrstvou (viz první <script> blok).      ║
+// ║  Editace probíhá přes savePerson(), saveFamily(), deletePerson().     ║
+// ║  Přímá editace FAMILY_DATA se nedoporučuje.                           ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+// (FAMILY_DATA, PM, FM a validateData jsou definovány v datové vrstvě)
+
+
+/** Zobrazí validační banner. Vrátí true pokud jsou kritické chyby. */
+function showValidation() {
+  const { errors, warnings } = validateData();
+  const banner = document.getElementById('val-banner');
+
+  if (!errors.length && !warnings.length) {
+    banner.style.display = 'none';
+    return false;
+  }
+
+  const items = [
+    ...errors.map(e   => `<li>🔴 ${e}</li>`),
+    ...warnings.map(w => `<li>🟡 ${w}</li>`),
+  ].join('');
+
+  banner.style.display = 'block';
+  banner.innerHTML = `<strong>Validace dat</strong><ul>${items}</ul>`;
+
+  return errors.length > 0;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  PŘIŘAZENÍ GENERACÍ
+//  BFS od kořenů (osoby bez rodičovské rodiny) dolů přes family edges.
+//  Iteruje dokud se nic nemění (max 50 průchodů).
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * @returns {Object.<string, number>} generation – id osoby → číslo generace (0 = nejstarší)
+ */
+function computeGenerations() {
+  const gen = {};
+
+  // Množina všech osob, které jsou někde dítětem
+  const childIds = new Set(FAMILY_DATA.families.flatMap(f => f.children || []));
+
+  // Kořeny: osoby, které nejsou dítětem žádné rodiny
+  FAMILY_DATA.people.forEach(p => {
+    if (!childIds.has(p.id)) gen[p.id] = 0;
+  });
+
+  // Iterativní propagace: partner → stejná generace; děti → +1
+  let changed = true;
+  let guard   = 0;
+  while (changed && guard++ < 50) {
+    changed = false;
+    for (const f of FAMILY_DATA.families) {
+      // Zjisti maximální generaci mezi partnery, kteří ji už mají
+      const partnerGens = f.partners
+        .map(id => gen[id])
+        .filter(v => v !== undefined);
+
+      if (!partnerGens.length) continue;
+      const g = Math.max(...partnerGens);
+
+      // Srovnej všechny partnery na stejnou generaci
+      for (const pid of f.partners) {
+        if (gen[pid] !== g) { gen[pid] = g; changed = true; }
+      }
+
+      // Děti jsou o 1 výše
+      for (const cid of f.children || []) {
+        if ((gen[cid] ?? -Infinity) < g + 1) {
+          gen[cid] = g + 1;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  // Fallback: osamělé ostrovy (warn se zobrazí v validateData)
+  FAMILY_DATA.people.forEach(p => {
+    if (gen[p.id] === undefined) gen[p.id] = 0;
+  });
+
+  return gen;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  KLASIFIKACE RODIN
+//  Descendant: dosažitelné z rootFamily jdoucí DOLŮ přes children.
+//  Ancestor: ostatní (prarodičovské rodiny, side branches).
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * @returns {{ descIds: Set<string>, ancestorFamilies: Object[] }}
+ */
+function classifyFamilies() {
+  const root    = FM[FAMILY_DATA.rootFamilyId];
+  const descIds = new Set();
+  const queue   = [root];
+
+  while (queue.length) {
+    const f = queue.shift();
+    if (!f || descIds.has(f.id)) continue;
+    descIds.add(f.id);
+
+    // Každé dítě může být partnerem v dalších rodinách → jdi dolů
+    for (const cid of f.children || []) {
+      for (const cf of FAMILY_DATA.families) {
+        if (cf.partners.includes(cid)) queue.push(cf);
+      }
+    }
+  }
+
+  const ancestorFamilies = FAMILY_DATA.families.filter(f => !descIds.has(f.id));
+  return { descIds, ancestorFamilies };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  POMOCNÉ FUNKCE PRO LAYOUT
+// ══════════════════════════════════════════════════════════════════════
+
+/** Y-souřadnice horní hrany generace g. */
+function rowY(g) {
+  return CFG.PAD + g * (CFG.NODE_H + CFG.GEN_GAP);
+}
+
+/**
+ * Vrátí rodiny, ve kterých je osoba PARTNEREM (ne dítětem),
+ * volitelně s výjimkou jedné rodiny.
+ */
+function partnerFamiliesOf(personId, excludeId = null) {
+  return FAMILY_DATA.families.filter(
+    f => f.id !== excludeId && (f.partners || []).includes(personId)
+  );
+}
+
+/**
+ * Seřadí id osob vzestupně dle roku narození.
+ * Osoby bez data jdou na konec.
+ */
+function sortByBorn(ids) {
+  return [...ids].sort((a, b) => (PM[a]?.born ?? 9999) - (PM[b]?.born ?? 9999));
+}
+
+/**
+ * Seřadí rodiny dle since / pořadí v FAMILY_DATA.families.
+ */
+function sortFamiliesByTime(families) {
+  return [...families].sort((a, b) => {
+    const as = a.since ?? 9999;
+    const bs = b.since ?? 9999;
+    if (as !== bs) return as - bs;
+    return FAMILY_DATA.families.indexOf(a) - FAMILY_DATA.families.indexOf(b);
+  });
+}
+
+/**
+ * Rozdělí rodiny osoby (anchor) na levé a pravé.
+ *
+ * Konvence: rozvedené/ukončené → LEFT (nejstarší nejdál od anchoru),
+ *           aktuální → RIGHT (nejnovější nejblíže anchoru).
+ * Příklad: f2:divorced, f6:divorced, f7:spouse → left=[f2,f6] right=[f7]
+ * Výsledná řada: [partner_f2][partner_f6][anchor][partner_f7]
+ */
+function allocateSides(anchorId, families) {
+  const sorted  = sortFamiliesByTime(families);
+  const past    = sorted.filter(f => f.relation === 'divorced' || f.until);
+  const current = sorted.filter(f => f.relation !== 'divorced' && !f.until);
+  const left    = [...past];
+  const right   = [];
+  if (current.length > 0) {
+    right.push(current[current.length - 1]);
+    for (let i = 0; i < current.length - 1; i++) left.push(current[i]);
+  }
+  return { left, right };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  VÝPOČET ŠÍŘEK (bottom-up)
+//  Rekurzivní; výsledky jsou cachované.
+// ══════════════════════════════════════════════════════════════════════
+
+const _wCache = {};
+
+/**
+ * Šířka celého podstromu rodiny f (partneři + děti rekurzivně).
+ * @param {string}  familyId
+ * @param {Set}     visited  – ochrana proti cyklům
+ */
+function familySubtreeWidth(familyId, visited = new Set()) {
+  if (_wCache[familyId] !== undefined) return _wCache[familyId];
+  if (visited.has(familyId)) return CFG.NODE_W;          // cycle guard
+  visited = new Set(visited); visited.add(familyId);
+
+  const f = FM[familyId];
+  if (!f) return CFG.NODE_W;
+
+  const partnerW = f.partners.length * CFG.NODE_W
+                 + Math.max(0, f.partners.length - 1) * CFG.PARTNER_GAP;
+
+  const children = f.children || [];
+  if (!children.length) {
+    _wCache[familyId] = partnerW;
+    return partnerW;
+  }
+
+  const childWidths = children.map(cid => childSlotWidth(cid, familyId, visited));
+  const childrenW   = childWidths.reduce((s, w) => s + w, 0)
+                    + Math.max(0, childWidths.length - 1) * CFG.CHILD_GAP;
+
+  const w = Math.max(partnerW, childrenW);
+  _wCache[familyId] = w;
+  return w;
+}
+
+/**
+ * Šířka "slotu" pro dítě cid, přicházejícího z rodiny parentFamilyId.
+ * Zahrnuje šíře dítěte-jako-partnera v jeho vlastních rodinách.
+ */
+function childSlotWidth(childId, parentFamilyId, visited = new Set()) {
+  const key = `${parentFamilyId}|${childId}`;
+  if (_wCache[key] !== undefined) return _wCache[key];
+
+  const ownFams = partnerFamiliesOf(childId, parentFamilyId);
+
+  if (!ownFams.length) {
+    _wCache[key] = CFG.NODE_W;
+    return CFG.NODE_W;
+  }
+
+  if (ownFams.length === 1) {
+    const w = familySubtreeWidth(ownFams[0].id, visited);
+    _wCache[key] = w;
+    return w;
+  }
+
+  // Více rodin: partner řada nahoře + děti každé rodiny vedle sebe
+  // topRowW = šířka partner řady
+  const { left, right } = allocateSides(childId, ownFams);
+  const topRowW = CFG.NODE_W
+               + left.length  * (CFG.NODE_W + CFG.PARTNER_GAP)
+               + right.length * (CFG.NODE_W + CFG.PARTNER_GAP);
+
+  // childrenW = součet šíří podstromů každé rodiny + CHILD_GAP mezery
+  // (rodiny jsou pod sebou seřazeny vlevo doprava, ne každá pod svým pár-slotem)
+  const subWidths = ownFams.map(f => familySubtreeWidth(f.id, visited));
+  const childrenW = subWidths.reduce((s, w) => s + w, 0)
+                  + Math.max(0, ownFams.length - 1) * CFG.CHILD_GAP;
+
+  const w = Math.max(topRowW, childrenW);
+  _wCache[key] = w;
+  return w;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  PŘIŘAZENÍ SOUŘADNIC – descendant strom (top-down)
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Zapíše pozici uzlu id do positions.
+ * Pokud uzel už pozici má (např. byl umístěn dříve), nepřepíše ji.
+ */
+function setPos(positions, id, x, y) {
+  if (positions[id]) return;    // každý uzel dostane pozici právě jednou
+  positions[id] = {
+    x, y,
+    w: CFG.NODE_W, h: CFG.NODE_H,
+    cx: x + CFG.NODE_W / 2,
+    cy: y + CFG.NODE_H / 2,
+  };
+}
+
+/**
+ * Umístí partnery rodiny f kolem centerX na řádku y.
+ * Vrátí seřazené pole id partnerů (starší vlevo).
+ */
+function placePartners(positions, f, centerX, y) {
+  const ordered = sortByBorn(f.partners);
+  const totalW  = ordered.length * CFG.NODE_W
+                + Math.max(0, ordered.length - 1) * CFG.PARTNER_GAP;
+  let x = centerX - totalW / 2;
+
+  for (const pid of ordered) {
+    setPos(positions, pid, x, y);
+    x += CFG.NODE_W + CFG.PARTNER_GAP;
+  }
+  return ordered;
+}
+
+/**
+ * Umístí rodinu f a rekurzivně celý její podstrom kolem centerX.
+ * @param {Object}  positions   – výstupní mapa pozic
+ * @param {Object}  f           – rodina
+ * @param {number}  centerX     – střed rodiny na ose X
+ * @param {Object}  gen         – generační mapa
+ * @param {Set}     visitedFams – ochrana proti opakovanému zpracování
+ */
+function placeFamilyAt(positions, f, centerX, gen, visitedFams) {
+  if (visitedFams.has(f.id)) return;
+  visitedFams.add(f.id);
+
+  const y = rowY(gen[f.partners[0]]);
+  placePartners(positions, f, centerX, y);
+
+  const children = f.children || [];
+  if (!children.length) return;
+
+  const childWidths = children.map(cid => childSlotWidth(cid, f.id));
+  const totalChildW = childWidths.reduce((s, w) => s + w, 0)
+                    + Math.max(0, childWidths.length - 1) * CFG.CHILD_GAP;
+
+  let cx = centerX - totalChildW / 2;
+  children.forEach((cid, i) => {
+    const slotCenter = cx + childWidths[i] / 2;
+    placeChildAt(positions, cid, f.id, slotCenter, gen, visitedFams);
+    cx += childWidths[i] + CFG.CHILD_GAP;
+  });
+}
+
+/**
+ * Umístí dítě childId (přicházející z rodiny parentFamilyId) na slotCenter.
+ * Pokud má vlastní rodiny, umístí i partnery a rekurzivně jejich podstromy.
+ */
+function placeChildAt(positions, childId, parentFamilyId, slotCenter, gen, visitedFams) {
+  const ownFams = partnerFamiliesOf(childId, parentFamilyId);
+  const y = rowY(gen[childId]);
+
+  if (!ownFams.length) {
+    // Bez vlastní rodiny: jen sám sebe
+    setPos(positions, childId, slotCenter - CFG.NODE_W / 2, y);
+    return;
+  }
+
+  if (ownFams.length === 1) {
+    // Jedna rodina: pár vedle sebe, rekurze dolů
+    const f          = ownFams[0];
+    const partnerId  = f.partners.find(id => id !== childId);
+    const pBorn      = PM[partnerId]?.born ?? 9999;
+    const cBorn      = PM[childId]?.born   ?? 9999;
+    const order      = pBorn < cBorn ? [partnerId, childId] : [childId, partnerId];
+    const totalW     = 2 * CFG.NODE_W + CFG.PARTNER_GAP;
+    let px = slotCenter - totalW / 2;
+
+    for (const id of order) {
+      setPos(positions, id, px, y);
+      px += CFG.NODE_W + CFG.PARTNER_GAP;
+    }
+
+    placeFamilyAt(positions, f, slotCenter, gen, visitedFams);
+    return;
+  }
+
+  // Více rodin: anchor uprostřed, partneři vlevo/vpravo
+  const { left, right } = allocateSides(childId, ownFams);
+  const topRowW = CFG.NODE_W
+               + left.length  * (CFG.NODE_W + CFG.PARTNER_GAP)
+               + right.length * (CFG.NODE_W + CFG.PARTNER_GAP);
+  let px = slotCenter - topRowW / 2;
+
+  // Seřaď: levé partnery (od nejdál k anchoru), pak anchor, pak pravé
+  const rowIds = [];
+
+  for (const f of left) {
+    const pid = f.partners.find(id => id !== childId);
+    setPos(positions, pid, px, y);
+    rowIds.push(pid);
+    px += CFG.NODE_W + CFG.PARTNER_GAP;
+  }
+
+  setPos(positions, childId, px, y);
+  rowIds.push(childId);
+  px += CFG.NODE_W + CFG.PARTNER_GAP;
+
+  for (const f of right) {
+    const pid = f.partners.find(id => id !== childId);
+    setPos(positions, pid, px, y);
+    rowIds.push(pid);
+    px += CFG.NODE_W + CFG.PARTNER_GAP;
+  }
+
+  // Děti každé rodiny se umísťují VEDLE SEBE pod celou partner řadou
+  // (v pořadí: left[0], left[1], ..., right[0], right[1], ...)
+  // — ne každá pod svým slot-středem, protože by se překrývaly.
+  const sortedFams = sortFamiliesByTime([...left, ...right]);
+  const subWidths  = sortedFams.map(f => familySubtreeWidth(f.id));
+  const totalChildW = subWidths.reduce((s, w) => s + w, 0)
+                    + Math.max(0, sortedFams.length - 1) * CFG.CHILD_GAP;
+  let childX = slotCenter - totalChildW / 2;
+
+  sortedFams.forEach((f, i) => {
+    if (!visitedFams.has(f.id)) {
+      let famCenter = childX + subWidths[i] / 2;
+
+      // Single child bez vlastní rodiny → centruj pod střed páru
+      // (místo sekvenční pozice, která může být daleko od páru)
+      const fChildren = f.children || [];
+      if (fChildren.length === 1 && partnerFamiliesOf(fChildren[0], f.id).length === 0) {
+        const placed = f.partners.filter(id => positions[id]);
+        if (placed.length === 2) {
+          famCenter = (positions[placed[0]].cx + positions[placed[1]].cx) / 2;
+        }
+      }
+
+      placeFamilyAt(positions, f, famCenter, gen, visitedFams);
+    }
+    childX += subWidths[i] + CFG.CHILD_GAP;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  UMÍSTĚNÍ ANCESTOR RODIN + ANCESTOR SIBLINGS
+//  Po descendant průchodu: umístí prarodičovské rodiny nad jejich děti.
+//  Také umístí sourozence konektorů (Tereza u Jana).
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Umístí všechny ancestor rodiny.
+ * Pro každou rodinu:
+ *   - "connector" = dítě, které již má pozici (z descendant průchodu)
+ *   - "siblings"  = ostatní děti bez pozice (ancestor siblings)
+ *
+ * Siblings dostanou pozici vedle konektoru.
+ * Poté se rodiče vycentrují nad všemi dětmi.
+ */
+function placeAncestorFamilies(positions, ancestorFamilies, gen) {
+  const sorted = [...ancestorFamilies].sort((a, b) =>
+    (gen[b.partners[0]] ?? 0) - (gen[a.partners[0]] ?? 0)
+  );
+
+  for (const f of sorted) {
+    const children   = f.children || [];
+    const connectors = children.filter(cid =>  positions[cid]);
+    const siblings   = children.filter(cid => !positions[cid]);
+    if (!connectors.length) continue;
+
+    const connId  = connectors[0];
+    const connPos = positions[connId];
+    const genG    = gen[connId];
+
+    // ── Umísti sourozence na první volné místo vedle konektoru ──────
+    // (volné = žádný existující uzel v téže generaci se nepřekrývá)
+    const allSorted = sortByBorn([...connectors, ...siblings]);
+    const connIdx   = allSorted.indexOf(connId);
+
+    for (const sibId of siblings) {
+      const sibIdx = allSorted.indexOf(sibId);
+      const goRight = sibIdx > connIdx;
+
+      // Preferovaná pozice vedle konektoru
+      let x = goRight
+        ? connPos.x + (sibIdx - connIdx) * (CFG.NODE_W + CFG.PARTNER_GAP)
+        : connPos.x - (connIdx - sibIdx) * (CFG.NODE_W + CFG.PARTNER_GAP);
+
+      // Najdi první volný slot (bez kolize s existujícími uzly v genG)
+      const genNodes = Object.entries(positions)
+        .filter(([id]) => gen[id] === genG)
+        .map(([, p]) => p)
+        .sort((a, b) => a.x - b.x);
+
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const n of genNodes) {
+          if (x < n.x + n.w + CFG.MIN_GAP && x + CFG.NODE_W + CFG.MIN_GAP > n.x) {
+            x = n.x + n.w + CFG.MIN_GAP;
+            changed = true;
+          }
+        }
+      }
+
+      positions[sibId] = {
+        x, y: connPos.y, w: CFG.NODE_W, h: CFG.NODE_H,
+        cx: x + CFG.NODE_W / 2, cy: connPos.y + CFG.NODE_H / 2,
+      };
+    }
+
+    // ── Vycentruj rodiče nad všemi dětmi ────────────────────────────
+    const allWithPos = children.filter(cid => positions[cid]);
+    const avgCX      = allWithPos.reduce((s, cid) => s + positions[cid].cx, 0) / allWithPos.length;
+    const parentY    = rowY(gen[f.partners[0]]);
+    const ordered    = sortByBorn(f.partners);
+    const totalPW    = ordered.length * CFG.NODE_W
+                     + Math.max(0, ordered.length - 1) * CFG.PARTNER_GAP;
+    let px = avgCX - totalPW / 2;
+    for (const pid of ordered) {
+      positions[pid] = {
+        x: px, y: parentY, w: CFG.NODE_W, h: CFG.NODE_H,
+        cx: px + CFG.NODE_W / 2, cy: parentY + CFG.NODE_H / 2,
+      };
+      px += CFG.NODE_W + CFG.PARTNER_GAP;
+    }
+  }
+
+  // ── Resolve overlaps na ANCESTOR generacích ─────────────────────
+  // Páry se posouvají jako celek (nikoli jednotlivě) — zachová vizuál páru.
+  resolveAncestorOverlaps(positions, ancestorFamilies, gen);
+}
+
+/**
+ * Řeší překryvy pouze na generacích, kde jsou ancestor rodiny.
+ * Každá ancestor rodina se posouvá jako celek (všichni partneři najednou),
+ * čímž se zachovává vizuální soudržnost páru.
+ */
+function resolveAncestorOverlaps(positions, ancestorFamilies, gen) {
+  const ancestorGens = new Set(
+    ancestorFamilies.map(f => gen[f.partners[0]] ?? 0)
+  );
+
+  for (const g of ancestorGens) {
+    // Sestav bloky: každá ancestor rodina na této generaci = jeden blok
+    const blocks = ancestorFamilies
+      .filter(f => (gen[f.partners[0]] ?? 0) === g)
+      .map(f => {
+        const ids = f.partners.filter(id => positions[id]);
+        return {
+          ids,
+          get left()  { return Math.min(...this.ids.map(id => positions[id].x)); },
+          get right() { return Math.max(...this.ids.map(id => positions[id].x + positions[id].w)); },
+        };
+      })
+      .filter(b => b.ids.length > 0)
+      .sort((a, b) => a.left - b.left);
+
+    let cursor = -Infinity;
+    for (const block of blocks) {
+      const minLeft = cursor === -Infinity ? block.left : cursor + CFG.MIN_GAP;
+      if (block.left < minLeft) {
+        const dx = minLeft - block.left;
+        block.ids.forEach(id => { positions[id].x += dx; positions[id].cx += dx; });
+      }
+      cursor = block.right;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  FAMILY POINTS
+//  Pro každou rodinu vypočítá souřadnice pro kreslení parent bus.
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * @typedef  {Object} FamilyPoint
+ * @property {number} slotX      – střed rodiny na ose X (kde padají děti)
+ * @property {number} parentBotY – spodní hrana rodičovských uzlů
+ * @property {number} parentBusY – Y výšky horní sběrnice (parent ports → bus)
+ * @property {number} childBusY  – Y výšky dolní sběrnice (bus → děti)
+ */
+
+/**
+ * Vypočítá FamilyPoint pro každou rodinu, která má obsazené pozice.
+ * @param {Object} positions
+ * @param {Object} gen
+ * @returns {Object.<string, FamilyPoint>}
+ */
+function computeFamilyPoints(positions, gen) {
+  const fp = {};
+
+  // ── Průchod 1: základní výpočet ──────────────────────────────────
+  for (const f of FAMILY_DATA.families) {
+    const partnerPos = f.partners.map(id => positions[id]).filter(Boolean);
+    if (!partnerPos.length) continue;
+
+    const childPos = (f.children || []).map(id => positions[id]).filter(Boolean);
+    const minCX     = Math.min(...partnerPos.map(p => p.cx));
+    const maxCX     = Math.max(...partnerPos.map(p => p.cx));
+    const slotX     = (minCX + maxCX) / 2;
+    const parentBotY = Math.max(...partnerPos.map(p => p.y + p.h));
+
+    if (!childPos.length) {
+      fp[f.id] = { slotX, parentBotY, parentBusY: parentBotY + 20, childBusY: parentBotY + 30 };
+      continue;
+    }
+
+    const childTopY = Math.min(...childPos.map(p => p.y));
+    const gap       = Math.max(42, childTopY - parentBotY);
+    const allCXs    = [...partnerPos.map(p => p.cx), ...childPos.map(p => p.cx)];
+
+    fp[f.id] = {
+      slotX,
+      parentBotY,
+      parentBusY:  parentBotY + gap / 3,
+      childBusY:   parentBotY + (2 * gap) / 3,
+      _busXmin:    Math.min(...allCXs),   // dočasné – pro stagger detekci
+      _busXmax:    Math.max(...allCXs),
+      _parentGen:  gen[f.partners[0]] ?? 0,
+    };
+  }
+
+  // ── Průchod 2: smart stagger ──────────────────────────────────────
+  // Offset parentBusY/childBusY pouze tam, kde se X-rozsahy překrývají.
+  // Rodiny bez křížení (f3 = Martin+Sandra) nedostanou žádný offset.
+  const byParentGen = {};
+  for (const [id, entry] of Object.entries(fp)) {
+    if (entry._busXmin === undefined) continue;
+    const g = entry._parentGen;
+    if (!byParentGen[g]) byParentGen[g] = [];
+    byParentGen[g].push({ id, entry });
+  }
+
+  for (const group of Object.values(byParentGen)) {
+    group.sort((a, b) => a.entry.slotX - b.entry.slotX);
+
+    // Greedy intervalové plánování: každá lane drží svou aktuální pravou hranu
+    const laneRight = [];
+    for (const { id, entry } of group) {
+      let lane = -1;
+      for (let i = 0; i < laneRight.length; i++) {
+        if (laneRight[i] <= entry._busXmin) { lane = i; laneRight[i] = entry._busXmax; break; }
+      }
+      if (lane < 0) { lane = laneRight.length; laneRight.push(entry._busXmax); }
+
+      if (lane > 0) {
+        const stagger = lane * CFG.PARENT_BUS_STAGGER;
+        fp[id].parentBusY += stagger;
+        fp[id].childBusY  += stagger;
+      }
+    }
+  }
+
+  // Odstraň dočasné klíče
+  for (const entry of Object.values(fp)) {
+    delete entry._busXmin; delete entry._busXmax; delete entry._parentGen;
+  }
+
+  return fp;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  ORCHESTRÁTOR LAYOUTU
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Spočítá kompletní layout.
+ * @returns {{ positions, familyPoints, gen, bounds } | null}
+ *   null = kritická validační chyba
+ */
+function computeLayout() {
+  // Invaliduj cache šířek (nutné pokud se data změnila)
+  Object.keys(_wCache).forEach(k => delete _wCache[k]);
+
+  if (showValidation()) return null;   // kritická chyba → stop
+
+  const gen = computeGenerations();
+  const { ancestorFamilies } = classifyFamilies();
+
+  const rootFamily  = FM[FAMILY_DATA.rootFamilyId];
+  const rootWidth   = familySubtreeWidth(FAMILY_DATA.rootFamilyId);
+  const rootCenterX = CFG.PAD + rootWidth / 2;
+
+  const positions   = {};
+  const visitedFams = new Set();
+
+  // 1) Descendant průchod: rootFamily → dolů
+  placeFamilyAt(positions, rootFamily, rootCenterX, gen, visitedFams);
+
+  // 2) Ancestor rodiny: umístit rodiče + ancestor siblings + resolve overlaps
+  placeAncestorFamilies(positions, ancestorFamilies, gen);
+
+  // 3) Rodiny ancestor-sidlingů (např. p22 má vlastní rodinu f_solo)
+  //    Tyto rodiny nejsou v descendant ani ancestor stromu, ale jejich
+  //    partner (sibling) byl umístěn v průchodu 2.
+  for (const f of FAMILY_DATA.families) {
+    if (visitedFams.has(f.id)) continue;
+    // Alespoň jeden partner má pozici → zpracuj tuto rodinu
+    const anchor = f.partners.find(pid => positions[pid]);
+    if (!anchor) continue;
+    const anchorPos = positions[anchor];
+    placeFamilyAt(positions, f, anchorPos.cx, gen, visitedFams);
+  }
+
+  // 4) Family points: pro kreslení parent bus
+  const familyPoints = computeFamilyPoints(positions, gen);
+
+  // 5) Bounds: pro D3 viewBox
+  const allPos = Object.values(positions);
+  const bounds = {
+    minX: Math.min(...allPos.map(p => p.x))       - CFG.PAD,
+    maxX: Math.max(...allPos.map(p => p.x + p.w)) + CFG.PAD,
+    minY: Math.min(...allPos.map(p => p.y))       - CFG.PAD,
+    maxY: Math.max(...allPos.map(p => p.y + p.h)) + CFG.PAD,
+  };
+
+  return { positions, familyPoints, gen, bounds };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  KRESLENÍ – POMOCNÉ
+// ══════════════════════════════════════════════════════════════════════
+
+const NS = 'http://www.w3.org/2000/svg';
+
+/** Zaokrouhlí na půl pixel (ostré SVG linky). */
+function px(v) { return Math.round(v) + 0.5; }
+
+let _gBranch, _gNodes;   // SVG skupiny: větve před uzly
+
+/** Přidá <line> do skupiny větví přes D3 API. */
+function svgLine(x1, y1, x2, y2, cls) {
+  _gBranch.append('line')
+    .attr('class', cls)
+    .attr('x1', px(x1)).attr('y1', px(y1))
+    .attr('x2', px(x2)).attr('y2', px(y2));
+}
+
+/** Přidá <path> do skupiny větví přes D3 API. */
+function svgPath(d, cls) {
+  _gBranch.append('path')
+    .attr('class', cls)
+    .attr('d', d);
+}
+
+/** Vrátí třídu CSS pro daný typ vztahu. */
+function relationCls(relation) {
+  if (relation === 'divorced') return 'lnk-divorced';
+  if (relation === 'partner')  return 'lnk-partner';
+  return 'lnk-spouse';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  KRESLENÍ – PARTNER LINKS
+//  Přímí sousedé: horizontální čára ze středů bočních hran.
+//  Nepřímí sousedé (blocker): "U-bend" nad uzly (dvojité zalomení).
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Zjistí, zda jsou dvě osoby v dané generaci přímí sousedé
+ * (žádný jiný uzel mezi nimi na stejné Y úrovni).
+ */
+function hasBlocker(aId, bId, positions) {
+  const a = positions[aId], b = positions[bId];
+  if (!a || !b) return false;
+  const left  = Math.min(a.x, b.x);
+  const right  = Math.max(a.x + a.w, b.x + b.w);
+  return Object.entries(positions).some(([id, p]) => {
+    if (id === aId || id === bId) return false;
+    if (Math.abs(p.cy - a.cy) > CFG.NODE_H / 2) return false;   // stejná generace
+    return p.x < right && (p.x + p.w) > left;
+  });
+}
+
+/**
+ * Nakreslí spojnici mezi partnery rodiny f.
+ * @param {Object} f        – rodina
+ * @param {Object} layout   – { positions, familyPoints, gen, bounds }
+ */
+function drawPartnerLink(f, layout) {
+  const { positions } = layout;
+  if (f.partners.length !== 2) return;
+
+  const [aId, bId] = f.partners;
+  const a = positions[aId], b = positions[bId];
+  if (!a || !b) return;
+
+  const cls   = relationCls(f.relation);
+  const leftP = a.cx <= b.cx ? a : b;
+  const rgtP  = a.cx <= b.cx ? b : a;
+  const lftId = a.cx <= b.cx ? aId : bId;
+  const rgtId = a.cx <= b.cx ? bId : aId;
+
+  if (!hasBlocker(lftId, rgtId, positions)) {
+    // ── Přímá sousední čára ze středů bočních hran ──
+    const y = leftP.y + leftP.h / 2;
+    svgLine(leftP.x + leftP.w, y, rgtP.x, y, cls);
+
+    // Symbol ✗ pro rozvod (uprostřed spojnice)
+    if (f.relation === 'divorced') {
+      const mx = (leftP.x + leftP.w + rgtP.x) / 2;
+      const d  = 5;
+      svgLine(mx - d, y - d, mx + d, y + d, 'lnk-cross');
+      svgLine(mx + d, y - d, mx - d, y + d, 'lnk-cross');
+    }
+    return;
+  }
+
+  // ── U-bend přes vrchol (dvojité zalomení) ──
+  // Čáry vycházejí horizontálně z horní třetiny bočních hran,
+  // stoupají nad uzly a spojí se horizontální úsečkou.
+  const frac     = 0.25;
+  const startY   = leftP.y + leftP.h * frac;
+  const endY     = rgtP.y  + rgtP.h  * frac;
+  const topY     = Math.min(leftP.y, rgtP.y);
+  const routeY   = topY - 18;    // výška dráhy nad uzly
+  const elbow    = 12;
+
+  const d = `M${px(leftP.x + leftP.w)},${px(startY)}`
+          + ` H${px(leftP.x + leftP.w + elbow)}`
+          + ` V${px(routeY)}`
+          + ` H${px(rgtP.x - elbow)}`
+          + ` V${px(endY)}`
+          + ` H${px(rgtP.x)}`;
+  svgPath(d, cls);
+
+  if (f.relation === 'divorced') {
+    const mx = (leftP.x + leftP.w + rgtP.x) / 2;
+    svgLine(mx - 5, routeY - 5, mx + 5, routeY + 5, 'lnk-cross');
+    svgLine(mx + 5, routeY - 5, mx - 5, routeY + 5, 'lnk-cross');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  KRESLENÍ – PARENT LINKS (svislé linie rodič → děti)
+//
+//  Schéma:
+//    [Otec]   [Matka]
+//      │          │         ← bottom port každého rodiče
+//      └────┬─────┘         ← parentBusY
+//           │               ← svislý kmen
+//    ────────┴────────       ← childBusY
+//    │       │       │
+//  [D1]    [D2]    [D3]
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Vrátí X-souřadnici výstupu z dolní hrany uzlu personId pro rodinu familyId.
+ * Pokud má osoba více rodin s dětmi, porty jsou distribuovány podél spodní hrany.
+ */
+function bottomPortX(personId, familyId, layout) {
+  const { positions, familyPoints } = layout;
+  const p = positions[personId];
+  if (!p) return positions[personId]?.cx ?? 0;
+
+  // Rodiny, ve kterých je tato osoba partnerem a mají děti + family point
+  const childFams = FAMILY_DATA.families.filter(
+    f => f.partners.includes(personId)
+      && (f.children || []).length > 0
+      && familyPoints[f.id]
+  ).sort((a, b) => familyPoints[a.id].slotX - familyPoints[b.id].slotX);
+
+  if (childFams.length <= 1) return p.cx;   // střed
+
+  const idx  = childFams.findIndex(f => f.id === familyId);
+  if (idx < 0) return p.cx;
+
+  // Distribuuj porty rovnoměrně podél spodní hrany
+  const step = p.w / (childFams.length + 1);
+  return p.x + step * (idx + 1);
+}
+
+/**
+ * Nakreslí parent links pro rodinu f.
+ */
+function drawParentLinks(f, layout) {
+  const { positions, familyPoints } = layout;
+  const fp = familyPoints[f.id];
+  if (!fp) return;
+
+  const partnerPos = f.partners.map(id => positions[id]).filter(Boolean);
+  const childPos   = (f.children || []).map(id => positions[id]).filter(Boolean);
+  if (!partnerPos.length || !childPos.length) return;
+
+  const parentBusY = fp.parentBusY;
+  const childBusY  = fp.childBusY;
+
+  // Střed dětí a střed rodičovských portů
+  const childCXs  = childPos.map(p => p.cx);
+  const childCenter  = (Math.min(...childCXs) + Math.max(...childCXs)) / 2;
+
+  const portXs    = f.partners.map(pid => bottomPortX(pid, f.id, layout));
+  const parentCenter = (Math.min(...portXs) + Math.max(...portXs)) / 2;
+
+  // Anchor = pro jednoho dítěte: dítě; pro více: střed rodičů
+  const anchorX = childPos.length === 1 ? childPos[0].cx : parentCenter;
+
+  // ── Linky z rodičovských portů na parentBusY ──
+  for (const pid of f.partners) {
+    const p  = positions[pid];
+    if (!p) continue;
+    const px_ = bottomPortX(pid, f.id, layout);
+    const py_ = p.y + p.h;
+
+    if (Math.abs(px_ - anchorX) < 1) {
+      // Přímá svislá čára
+      svgPath(`M${px(px_)},${px(py_)} V${px(parentBusY)}`, 'lnk-parent');
+    } else {
+      svgPath(`M${px(px_)},${px(py_)} V${px(parentBusY)} H${px(anchorX)}`, 'lnk-parent');
+    }
+  }
+
+  // ── Tečka na parentBusY ──
+  _gBranch.append('circle')
+    .attr('cx', px(anchorX)).attr('cy', px(parentBusY))
+    .attr('r', 3).attr('fill', 'var(--link-par)');
+
+  // ── Svislý kmen parentBusY → childBusY ──
+  svgPath(`M${px(anchorX)},${px(parentBusY)} V${px(childBusY)}`, 'lnk-parent');
+
+  // ── Vodorovná child lišta (zahrnuje anchorX) ──
+  const minCX = Math.min(anchorX, ...childCXs);
+  const maxCX = Math.max(anchorX, ...childCXs);
+  if (Math.abs(maxCX - minCX) > 1) {
+    svgPath(`M${px(minCX)},${px(childBusY)} H${px(maxCX)}`, 'lnk-parent');
+  }
+
+  // ── Svislé kapky k dětem ──
+  for (const cp of childPos) {
+    svgPath(`M${px(cp.cx)},${px(childBusY)} V${px(cp.y)}`,
+      f.children.length > 1 ? 'lnk-parent' : 'lnk-parent');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  KRESLENÍ – UZLY
+// ══════════════════════════════════════════════════════════════════════
+
+let _activeId = null;
+
+/**
+ * Zkrátí jméno osoby na max. 20 znaků s inteligentní zkratkou.
+ */
+function shortenName(name) {
+  if (name.length <= 20) return name;
+  const parts = name.split(' ');
+  if (parts.length >= 2) return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+  return name.slice(0, 19) + '…';
+}
+
+/**
+ * Vrátí formátovaný text let osoby.
+ */
+function yearsText(person) {
+  if (!person.born) return '—';
+  if (person.died)  return `${person.born} – ${person.died}`;
+  return `* ${person.born}`;
+}
+
+/** Zajistí existenci <defs> v SVG (pro clipPath). */
+function ensureDefs() {
+  const svg  = document.getElementById('svg');
+  let   defs = svg.querySelector('defs');
+  if (!defs) { defs = document.createElementNS(NS, 'defs'); svg.prepend(defs); }
+  return defs;
+}
+
+/**
+ * Nakreslí všechny uzly.
+ * @param {Object} layout
+ */
+function drawNodes(layout) {
+  const { positions, gen } = layout;
+
+  for (const person of FAMILY_DATA.people) {
+    const pos = positions[person.id];
+    if (!pos) continue;                        // osoba nebyla umístěna
+
+    const g = _gNodes.append('g')
+      .attr('class', `node${person.died ? ' dead' : ''}`)
+      .attr('id', `nd-${person.id}`)
+      .attr('transform', `translate(${pos.x},${pos.y})`)
+      .on('click', () => openPanel(person, layout));
+
+    // Podkladový obdélník
+    g.append('rect').attr('class', 'node-bg').attr('width', CFG.NODE_W).attr('height', CFG.NODE_H).attr('rx', 3);
+
+    // Barevný pruh (pohlaví)
+    if (person.gender) {
+      g.append('rect').attr('class', 'nd-bar')
+        .attr('width', 3).attr('height', CFG.NODE_H)
+        .attr('rx', 1.5)
+        .attr('fill', person.gender === 'f' ? 'var(--col-f)' : 'var(--col-m)')
+        .attr('opacity', .65);
+    }
+
+    // Mini foto (z localStorage nebo person.photo)
+    const photoSrc = localStorage.getItem(`fp_${person.id}`) || person.photo || null;
+    const PR       = 18;
+    const photoCX  = CFG.NODE_W - PR - 7;
+    const photoCY  = CFG.NODE_H / 2;
+
+    if (photoSrc) {
+      const cpId = `cpn-${person.id}`;
+      if (!document.getElementById(cpId)) {
+        const defs = ensureDefs();
+        const cp   = document.createElementNS(NS, 'clipPath');
+        cp.setAttribute('id', cpId);
+        const ci   = document.createElementNS(NS, 'circle');
+        ci.setAttribute('cx', photoCX); ci.setAttribute('cy', photoCY); ci.setAttribute('r', PR);
+        cp.appendChild(ci); defs.appendChild(cp);
+      }
+      g.append('image')
+        .attr('href', photoSrc)
+        .attr('x', photoCX - PR).attr('y', photoCY - PR)
+        .attr('width', PR * 2).attr('height', PR * 2)
+        .attr('clip-path', `url(#cpn-${person.id})`);
+      g.append('circle').attr('class', 'nd-pring')
+        .attr('cx', photoCX).attr('cy', photoCY).attr('r', PR);
+    }
+
+    // Jméno a roky
+    const hasPhoto  = !!photoSrc;
+    const textX     = hasPhoto ? 10 : CFG.NODE_W / 2 + 2;
+    const textAnchor = hasPhoto ? 'start' : 'middle';
+
+    g.append('text').attr('class', 'nd-name').attr('x', textX).attr('y', 26)
+      .attr('text-anchor', textAnchor).text(shortenName(person.name));
+
+    g.append('text').attr('class', 'nd-years').attr('x', textX).attr('y', 45)
+      .attr('text-anchor', textAnchor).text(yearsText(person));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  GENERAČNÍ POPISKY
+// ══════════════════════════════════════════════════════════════════════
+
+function drawGenLabels(layout) {
+  const { gen } = layout;
+  const maxGen = Math.max(...Object.values(gen));
+
+  for (let g = 0; g <= maxGen; g++) {
+    const label = CFG.ROMAN[g] || `${g + 1}.`;
+    _gBranch.append('text')
+      .attr('class', 'gen-lbl')
+      .attr('x', CFG.PAD - 16)
+      .attr('y', rowY(g) + CFG.NODE_H / 2 + 4)
+      .attr('text-anchor', 'end')
+      .text(label);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  LEGENDA
+// ══════════════════════════════════════════════════════════════════════
+
+function buildLegend() {
+  const body = document.getElementById('legBody');
+
+  function addSec(label) {
+    const d = document.createElement('div');
+    d.className = 'leg-sec'; d.textContent = label;
+    body.appendChild(d);
+  }
+
+  function addRow(label, cls, isDashed, isCross) {
+    const row = document.createElement('div'); row.className = 'leg-row';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '38'); svg.setAttribute('height', '14');
+
+    const line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', '2'); line.setAttribute('y1', '7');
+    line.setAttribute('x2', '36'); line.setAttribute('y2', '7');
+    line.setAttribute('class', cls); line.setAttribute('stroke-width', '2');
+    if (isDashed) line.setAttribute('stroke-dasharray', '5 3');
+    svg.appendChild(line);
+
+    if (isCross) {
+      [[16,3,22,11],[22,3,16,11]].forEach(([x1,y1,x2,y2]) => {
+        const c = document.createElementNS(NS, 'line');
+        c.setAttribute('x1',x1); c.setAttribute('y1',y1);
+        c.setAttribute('x2',x2); c.setAttribute('y2',y2);
+        c.setAttribute('class', 'lnk-cross'); c.setAttribute('stroke-width','1.8');
+        svg.appendChild(c);
+      });
+    }
+
+    const lbl = document.createElement('span');
+    lbl.className = 'leg-lbl'; lbl.textContent = label;
+    row.appendChild(svg); row.appendChild(lbl);
+    body.appendChild(row);
+  }
+
+  addSec('Páry');
+  addRow('Manžel/Manželka',  'lnk-spouse',   false, false);
+  addRow('Partner/Partnerka','lnk-partner',  true,  false);
+  addRow('Rozvedení',        'lnk-divorced', true,  true);
+  addSec('Rodič → Dítě');
+  addRow('Biologická vazba', 'lnk-parent',   false, false);
+
+  document.getElementById('legTgl').onclick = () => {
+    document.getElementById('legBody').classList.toggle('closed');
+    document.getElementById('legArr').textContent =
+      document.getElementById('legBody').classList.contains('closed') ? '▸' : '▾';
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  DETAIL PANEL
+// ══════════════════════════════════════════════════════════════════════
+
+const _panel = () => document.getElementById('panel');
+
+document.getElementById('pClose').onclick = closePanel;
+
+function openPanel(person, layout) {
+  // Toggle: druhý klik na stejnou osobu panel zavře
+  if (_activeId === person.id && _panel().classList.contains('open')) {
+    closePanel(); return;
+  }
+
+  // Deaktivuj předchozí uzel
+  if (_activeId) document.getElementById(`nd-${_activeId}`)?.classList.remove('active');
+  _activeId = person.id;
+  document.getElementById(`nd-${person.id}`)?.classList.add('active');
+
+  // Vždy začni v read-only módu (reset po případném edit módu)
+  _showReadView(true);
+
+  const { gen } = layout;
+  document.getElementById('pGen').textContent   = `Generace ${CFG.ROMAN[gen[person.id]] || gen[person.id] + 1}`;
+  document.getElementById('pName').textContent  = person.name;
+  document.getElementById('pMaiden').textContent = person.maiden ? `roz. ${person.maiden}` : '';
+
+  // Foto
+  const src    = localStorage.getItem(`fp_${person.id}`) || person.photo || null;
+  const imgEl  = document.getElementById('pPhotoImg');
+  const phEl   = document.getElementById('pPhotoPh');
+  if (src) { imgEl.src = src; imgEl.style.display = 'block'; phEl.style.display = 'none'; }
+  else     { imgEl.style.display = 'none'; phEl.style.display = 'flex'; phEl.textContent = person.name.charAt(0).toUpperCase(); }
+  document.getElementById('pHint').style.display = 'none';
+
+  // Foto upload
+  const fi = document.getElementById('p-photo-file');
+  document.getElementById('pPhotoBtn').onclick = () => fi.click();
+  fi.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const b64 = ev.target.result;
+      localStorage.setItem(`fp_${person.id}`, b64);
+      imgEl.src = b64; imgEl.style.display = 'block'; phEl.style.display = 'none';
+      const hint = document.getElementById('pHint');
+      const code = document.getElementById('pHintCode');
+      hint.style.display = 'block';
+      code.textContent = `photo: "…" [${Math.round(b64.length / 1024)}KB – klikni pro kopírování]`;
+      code.onclick = () => {
+        navigator.clipboard.writeText(b64).catch(() => {});
+        code.style.background = '#4a7fa5';
+        setTimeout(() => code.style.background = '', 1500);
+      };
+    };
+    reader.readAsDataURL(file); e.target.value = '';
+  };
+
+  // Dynamická pole
+  const fields = [];
+  if (person.born)       fields.push(['Narozen/a',      person.born]);
+  if (person.died)       fields.push(['Zemřel/a',        person.died]);
+  if (person.birthplace) fields.push(['Místo narození',  person.birthplace]);
+  if (person.occupation) fields.push(['Povolání',        person.occupation]);
+  if (person.gender)     fields.push(['Pohlaví',         person.gender === 'f' ? 'Žena' : 'Muž']);
+
+  // Partneři
+  for (const f of FAMILY_DATA.families) {
+    if (!f.partners.includes(person.id)) continue;
+    const pid      = f.partners.find(id => id !== person.id);
+    if (!pid) continue;
+    const partner  = PM[pid];
+    const relLabel = f.relation === 'divorced' ? 'Rozvedení'
+                   : f.relation === 'partner'  ? 'Partner/ka'
+                   : 'Manžel/ka';
+    const badge    = f.relation === 'divorced' ? 'div' : 'sp';
+    const years    = [f.since, f.until].filter(Boolean).join('–');
+    fields.push(['Partner/ka',
+      `${partner?.name || pid}${years ? ` (${years})` : ''}<span class="p-badge ${badge}">${relLabel}</span>`
+    ]);
+  }
+
+  // Rodiče
+  const parentFamily = FAMILY_DATA.families.find(f => (f.children || []).includes(person.id));
+  if (parentFamily) {
+    const pNames = parentFamily.partners.map(pid => PM[pid]?.name || pid).join(', ');
+    fields.push(['Rodiče', `${pNames}<span class="p-badge bio">bio</span>`]);
+  }
+
+  // Děti
+  const myFams = FAMILY_DATA.families.filter(f => f.partners.includes(person.id) && (f.children || []).length);
+  if (myFams.length) {
+    const names = myFams.flatMap(f => f.children).map(cid => PM[cid]?.name || cid).join(', ');
+    fields.push(['Děti', names]);
+  }
+
+  document.getElementById('pFields').innerHTML = fields.map(([l, v]) =>
+    `<div class="p-field"><span class="p-flbl">${l}</span><span class="p-fval">${v}</span></div>`
+  ).join('');
+
+  // Bio + note
+  const bioW = document.getElementById('pBio');
+  if (person.bio) { bioW.style.display = 'block'; document.getElementById('pBioTxt').textContent = person.bio; }
+  else bioW.style.display = 'none';
+
+  const noteEl = document.getElementById('pNote');
+  if (person.note) { noteEl.style.display = 'block'; noteEl.textContent = person.note; }
+  else noteEl.style.display = 'none';
+
+  // Tlačítko Upravit
+  document.getElementById('pEdit').onclick = () => openEditForm(person);
+
+  _panel().classList.add('open');
+}
+
+function _showReadView(show) {
+  document.getElementById('pEditForm').style.display = show ? 'none' : 'block';
+  const readSections = ['p-hdr', 'p-fields', 'p-bio', 'p-note', 'p-edit-bar'];
+  readSections.forEach(cls => {
+    const el = document.querySelector(`.${cls}`) || document.getElementById(cls);
+    if (el) el.style.display = show ? '' : 'none';
+  });
+}
+
+function openEditForm(person) {
+  // Schovej read-only view, zobraz formulář
+  _showReadView(false);
+
+  // Naplň pole
+  document.getElementById('ef-name').value       = person.name        || '';
+  document.getElementById('ef-born').value        = person.born        || '';
+  document.getElementById('ef-died').value        = person.died        || '';
+  document.getElementById('ef-maiden').value      = person.maiden      || '';
+  document.getElementById('ef-birthplace').value  = person.birthplace  || '';
+  document.getElementById('ef-occupation').value  = person.occupation  || '';
+  document.getElementById('ef-bio').value         = person.bio         || '';
+  document.getElementById('ef-note').value        = person.note        || '';
+
+  // Pohlaví
+  document.querySelectorAll('input[name="ef-gender"]').forEach(r => {
+    r.checked = r.value === (person.gender || '');
+  });
+
+  // Vymaž předchozí chyby
+  ['ef-name-err', 'ef-born-err', 'ef-died-err'].forEach(id => {
+    document.getElementById(id).textContent = '';
+  });
+  ['ef-name', 'ef-born', 'ef-died'].forEach(id => {
+    document.getElementById(id).classList.remove('err');
+  });
+
+  // Tlačítka
+  document.getElementById('efSave').onclick   = () => savePersonEdits(person.id);
+  document.getElementById('efCancel').onclick = () => openPanel(person, _layout);
+}
+
+function savePersonEdits(personId) {
+  // Přečti hodnoty
+  const name       = document.getElementById('ef-name').value.trim();
+  const bornRaw    = document.getElementById('ef-born').value.trim();
+  const diedRaw    = document.getElementById('ef-died').value.trim();
+  const born       = bornRaw ? parseInt(bornRaw, 10) : null;
+  const died       = diedRaw ? parseInt(diedRaw, 10) : null;
+  const gender     = document.querySelector('input[name="ef-gender"]:checked')?.value || null;
+
+  // Validace
+  let valid = true;
+  function fieldErr(inputId, errId, msg) {
+    document.getElementById(inputId).classList.add('err');
+    document.getElementById(errId).textContent = msg;
+    valid = false;
+  }
+  function fieldOk(inputId, errId) {
+    document.getElementById(inputId).classList.remove('err');
+    document.getElementById(errId).textContent = '';
+  }
+
+  if (!name) {
+    fieldErr('ef-name', 'ef-name-err', 'Jméno je povinné.');
+  } else { fieldOk('ef-name', 'ef-name-err'); }
+
+  if (bornRaw && (isNaN(born) || born < 1000 || born > 2100)) {
+    fieldErr('ef-born', 'ef-born-err', 'Zadej platný rok (1000–2100).');
+  } else { fieldOk('ef-born', 'ef-born-err'); }
+
+  if (diedRaw && (isNaN(died) || died < 1000 || died > 2100)) {
+    fieldErr('ef-died', 'ef-died-err', 'Zadej platný rok (1000–2100).');
+  } else if (born && died && died < born) {
+    fieldErr('ef-died', 'ef-died-err', 'Rok úmrtí nesmí být před narozením.');
+  } else { fieldOk('ef-died', 'ef-died-err'); }
+
+  if (!valid) return;
+
+  // Zapis do FAMILY_DATA
+  const person = PM[personId];
+  person.name        = name;
+  person.born        = born  || undefined;
+  person.died        = died  || undefined;
+  person.gender      = gender || undefined;
+  person.maiden      = document.getElementById('ef-maiden').value.trim()     || undefined;
+  person.birthplace  = document.getElementById('ef-birthplace').value.trim() || undefined;
+  person.occupation  = document.getElementById('ef-occupation').value.trim() || undefined;
+  person.bio         = document.getElementById('ef-bio').value.trim()        || undefined;
+  person.note        = document.getElementById('ef-note').value.trim()       || undefined;
+
+  // Perzistence přes datovou vrstvu
+  persist();
+
+  // Překresli a obnov panel (reset _activeId aby toggle nezavřel panel)
+  render();
+  _activeId = null;
+  openPanel(PM[personId], _layout);
+}
+
+function closePanel() {
+  if (_activeId) { document.getElementById(`nd-${_activeId}`)?.classList.remove('active'); _activeId = null; }
+  _panel().classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════════════
+
+let _zoomBehavior, _layout;
+
+function render() {
+  const zG = d3.select('#zG');
+  zG.selectAll('*').remove();
+
+  _layout = computeLayout();
+  if (!_layout) return;   // kritická validační chyba
+
+  _gBranch = zG.append('g');   // větve (za uzly)
+  _gNodes  = zG.append('g');   // uzly (před větvemi)
+
+  const { positions, familyPoints, gen } = _layout;
+
+  // Generační popisky
+  drawGenLabels(_layout);
+
+  // Spojnice párů a rodič→dítě
+  for (const f of FAMILY_DATA.families) {
+    drawPartnerLink(f, _layout);
+    drawParentLinks(f, _layout);
+  }
+
+  // Uzly
+  drawNodes(_layout);
+
+  // Fit view po prvním renderu
+  fitView();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  D3 ZOOM + FIT
+// ══════════════════════════════════════════════════════════════════════
+
+function fitView() {
+  if (!_layout) return;
+  const { bounds } = _layout;
+  const canvas = document.getElementById('canvas');
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  const treeW = bounds.maxX - bounds.minX;
+  const treeH = bounds.maxY - bounds.minY;
+  const sc = Math.min(W / treeW, H / treeH, 1) * 0.88;
+  const tx = (W - treeW * sc) / 2 - bounds.minX * sc;
+  const ty = (H - treeH * sc) / 2 - bounds.minY * sc;
+
+  d3.select('#svg')
+    .transition().duration(500)
+    .call(_zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  IMPORT / EXPORT
+// ══════════════════════════════════════════════════════════════════════
+
+function exportData() {
+  const json = exportData_db();   // datová vrstva sestaví JSON včetně fotek
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+  a.download = 'rodokmen-data.json';
+  a.click();
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const { ok, errors, warnings } = importData_db(e.target.result);
+    if (!ok) {
+      showImportError('Import odmítnut: ' + errors.join(' | '));
+      return;
+    }
+    closePanel();
+    render();
+    if (warnings.length > 0) showImportError('Import OK, ale varování: ' + warnings.join(' | '), '#b07020');
+  };
+  reader.readAsText(file);
+}
+
+function showImportError(msg, color = '#c0392b') {
+  const b = document.getElementById('val-banner');
+  b.textContent = msg;
+  b.style.background = color;
+  b.style.display = 'block';
+  setTimeout(() => { b.style.display = 'none'; }, 6000);
+}
+
+function initZoom() {
+  const svgSel = d3.select('#svg');
+  _zoomBehavior = d3.zoom()
+    .scaleExtent([0.05, 4])
+    .on('zoom', e => d3.select('#zG').attr('transform', e.transform));
+  svgSel.call(_zoomBehavior);
+
+  document.getElementById('zcIn') .onclick = () => svgSel.transition().duration(200).call(_zoomBehavior.scaleBy, 1.35);
+  document.getElementById('zcOut').onclick = () => svgSel.transition().duration(200).call(_zoomBehavior.scaleBy, 0.75);
+  document.getElementById('zcFit').onclick = fitView;
+
+  document.getElementById('zcExport').onclick = exportData;
+
+  const fileInput = document.getElementById('io-file-input');
+  document.getElementById('zcImport').onclick = () => fileInput.click();
+  fileInput.onchange = e => { const f = e.target.files[0]; if (f) { importData(f); e.target.value = ''; } };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════════════
+
+buildLegend();
+initZoom();
+initDB();   // načte localStorage → sestaví FAMILY_DATA, PM, FM
+render();
+</script>
+</body>
+</html>
