@@ -29,7 +29,7 @@ const SITE_CONTENT = {
    */
   hero: {
     // Malý modrý text nad hlavním nadpisem.
-    eyebrow: "Osobní web · portfolio · storage nápadů",
+    eyebrow: "Osobní web · portfolio · nápady · mini aplikace",
 
     // Hlavní velký nadpis homepage.
     title: "Stavím věci, které dávají smysl.",
@@ -58,7 +58,7 @@ const SITE_CONTENT = {
     metaLeft: "Digital workspace",
     metaRight: "2026",
     title: "Nekonečný prostor pro tvorbu.",
-    text: "Nápady, prototypy, mini aplikace a experimenty s AI."
+    text: "Nápady, prototypy, mini aplikace, osobní projekty a experimenty s AI."
   },
 
   /**
@@ -198,9 +198,9 @@ const SITE_CONTENT = {
    * Nadpisová část stránky apps.html.
    */
   appsPage: {
-    eyebrow: "Mini aplikace & prototypy",
+    eyebrow: "Mini aplikace & projekty",
     title: "Apps",
-    lead: "Rozcestník malých aplikací, experimentů a nástrojů. Některé budou hotové, jiné zatím jen jako pracovní prototypy."
+    lead: "Rozcestník hotových malých aplikací, pracovních prototypů a projektů. Některé věci jsou už použitelné, jiné zatím čekají na další iteraci."
   },
 
   /**
@@ -213,7 +213,7 @@ const SITE_CONTENT = {
   appsPreview: {
     eyebrow: "Apps preview",
     title: "Mini aplikace jako další vrstva webu.",
-    lead: "Na indexu jen ochutnávka. Po rozkliknutí jdeš na Apps stránku, kde bude katalog nástrojů, prototypů a experimentů."
+    lead: "Na homepage je jen výběr. Celý katalog aplikací a projektů najdeš v Apps sekci — včetně prvního funkčního projektu Rodokmen."
   },
 
   /**
@@ -235,13 +235,22 @@ const SITE_CONTENT = {
    */
   apps: [
     {
+      id: "rodokmen",
+      tag: "Live",
+      title: "Rodokmen",
+      text: "Interaktivní vizualizace rodinných vazeb v prohlížeči. Data se ukládají lokálně a lze je ručně exportovat nebo importovat jako JSON.",
+      href: "projekty/rodokmen/",
+      role: "main",
+      linkText: "Otevřít rodokmen →"
+    },
+    {
       id: "idea-vault",
       tag: "Planned",
       title: "Idea Vault",
-      text: "Jednoduchý katalog nápadů s kategoriemi, stavem a krátkým popisem.",
+      text: "Jednoduchý katalog nápadů s kategoriemi, stavem a krátkým popisem. Zatím funguje jako obsahový koncept v sekci Ideas.",
       href: "ideas.html",
-      role: "main",
-      linkText: "Prozkoumat Apps →"
+      role: "side",
+      linkText: null
     },
     {
       id: "prompt-library",
@@ -258,7 +267,7 @@ const SITE_CONTENT = {
       title: "CSS Playground",
       text: "Místo pro testování animací, efektů, layoutů a vizuálních experimentů.",
       href: "apps.html",
-      role: "side",
+      role: "catalog",
       linkText: null
     },
     {
@@ -303,7 +312,7 @@ const SITE_CONTENT = {
     title: "Homepage jako výkladní skříň. Detaily jako produktové vrstvy.",
     paragraphs: [
       "Index bych nezahltil vším. Měl by ukazovat nejlepší výřezy: nejzajímavější nápady, nejnovější aplikace, jasný důvod existence webu a jednoduché cesty dál.",
-      "Detailní stránky bych použil jako katalogy. Až bude konkrétní aplikace hotová, dostane vlastní stránku typu idea-vault.html."
+      "Detailní stránky bych použil jako katalogy. Apps fungují jako rozcestník a hotové projekty dostávají vlastní adresu, například projekty/rodokmen/."
     ]
   },
 
@@ -329,7 +338,7 @@ const SITE_CONTENT = {
       id: "deploy-and-iterate",
       number: "03",
       title: "Nasadit a iterovat",
-      text: "GitHub → Cloudflare Pages → vlastní doména → další verze."
+      text: "GitHub Pages → vlastní doména → malé bezpečné změny → další verze."
     }
   ],
 
@@ -355,3 +364,4 @@ const SITE_CONTENT = {
    */
   footer: "© 2026 drak. Built clean, simple and without frameworks."
 };
+
