@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog · Drak</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    :root {
+      --changelog-line: rgba(120, 130, 255, 0.24);
+      --changelog-card: rgba(255, 255, 255, 0.72);
+      --changelog-card-border: rgba(120, 130, 255, 0.18);
+      --changelog-muted: rgba(55, 65, 81, 0.72);
+      --changelog-shadow: 0 24px 70px rgba(20, 30, 90, 0.14);
+      --changelog-scale: 1;
+    }
+
+    body.dark,
+    [data-theme="dark"] {
+      --changelog-line: rgba(150, 160, 255, 0.22);
+      --changelog-card: rgba(16, 23, 42, 0.72);
+      --changelog-card-border: rgba(150, 160, 255, 0.20);
+      --changelog-muted: rgba(226, 232, 240, 0.72);
+      --changelog-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+    }
+
+    .changelog-shell {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 72px;
+    }
+
+    .changelog-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .changelog-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      font-size: 0.95rem;
+      color: inherit;
+      opacity: 0.78;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .changelog-back:hover {
+      opacity: 1;
+      transform: translateX(-2px);
+    }
+
+    .changelog-hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--changelog-card-border);
+      border-radius: 28px;
+      padding: clamp(28px, 5vw, 56px);
+      background:
+        radial-gradient(circle at 18% 18%, rgba(92, 124, 255, 0.20), transparent 34%),
+        radial-gradient(circle at 82% 20%, rgba(45, 212, 191, 0.16), transparent 30%),
+        var(--changelog-card);
+      box-shadow: var(--changelog-shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .changelog-hero h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(2.2rem, 7vw, 5.2rem);
+      line-height: 0.92;
+      letter-spacing: -0.065em;
+    }
+
+    .changelog-hero p {
+      max-width: 700px;
+      margin: 22px 0 0;
+      color: var(--changelog-muted);
+      font-size: clamp(1rem, 2vw, 1.18rem);
+      line-height: 1.7;
+    }
+
+    .changelog-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .changelog-stat {
+      border: 1px solid var(--changelog-card-border);
+      border-radius: 20px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.44);
+    }
+
+    body.dark .changelog-stat,
+    [data-theme="dark"] .changelog-stat {
+      background: rgba(15, 23, 42, 0.44);
+    }
+
+    .changelog-stat strong {
+      display: block;
+      font-size: 1.55rem;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .changelog-stat span {
+      display: block;
+      margin-top: 7px;
+      color: var(--changelog-muted);
+      font-size: 0.9rem;
+    }
+
+    .changelog-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin: 30px 0;
+      padding: 16px;
+      border: 1px solid var(--changelog-card-border);
+      border-radius: 24px;
+      background: var(--changelog-card);
+      box-shadow: 0 12px 40px rgba(20, 30, 90, 0.08);
+      backdrop-filter: blur(16px);
+    }
+
+    .changelog-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .changelog-filter {
+      border: 1px solid var(--changelog-card-border);
+      border-radius: 999px;
+      padding: 9px 13px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.92rem;
+      opacity: 0.78;
+      transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+    }
+
+    .changelog-filter:hover,
+    .changelog-filter.is-active {
+      opacity: 1;
+      transform: translateY(-1px);
+      background: rgba(92, 124, 255, 0.12);
+    }
+
+    .changelog-zoom {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--changelog-muted);
+      font-size: 0.92rem;
+      white-space: nowrap;
+    }
+
+    .changelog-zoom input {
+      width: 150px;
+      accent-color: #5c7cff;
+    }
+
+    .timeline-wrap {
+      position: relative;
+      padding: 20px 0 10px;
+    }
+
+    .timeline-wrap::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      transform: translateX(-50%);
+      background: linear-gradient(to bottom, transparent, var(--changelog-line), transparent);
+    }
+
+    .timeline-item {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+      margin: calc(24px * var(--changelog-scale)) 0;
+    }
+
+    .timeline-item.is-hidden {
+      display: none;
+    }
+
+    .timeline-dot {
+      position: relative;
+      z-index: 2;
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--changelog-card-border);
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), transparent 34%),
+        linear-gradient(135deg, rgba(92, 124, 255, 0.95), rgba(45, 212, 191, 0.82));
+      box-shadow: 0 12px 34px rgba(92, 124, 255, 0.22);
+      color: white;
+      font-weight: 800;
+      font-size: 0.92rem;
+    }
+
+    .timeline-card {
+      min-height: calc(176px * var(--changelog-scale));
+      transform: scale(var(--changelog-scale));
+      transform-origin: center;
+      border: 1px solid var(--changelog-card-border);
+      border-radius: 26px;
+      padding: clamp(20px, 4vw, 30px);
+      background: var(--changelog-card);
+      box-shadow: var(--changelog-shadow);
+      backdrop-filter: blur(16px);
+      cursor: pointer;
+      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    }
+
+    .timeline-card:hover {
+      transform: scale(calc(var(--changelog-scale) + 0.025)) translateY(-2px);
+      border-color: rgba(92, 124, 255, 0.38);
+    }
+
+    .timeline-card:focus-visible {
+      outline: 3px solid rgba(92, 124, 255, 0.45);
+      outline-offset: 4px;
+    }
+
+    .timeline-item:nth-child(odd) .timeline-card {
+      grid-column: 1;
+      transform-origin: right center;
+    }
+
+    .timeline-item:nth-child(odd) .timeline-dot {
+      grid-column: 2;
+    }
+
+    .timeline-item:nth-child(even) .timeline-card {
+      grid-column: 3;
+      transform-origin: left center;
+    }
+
+    .timeline-item:nth-child(even) .timeline-dot {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .timeline-date {
+      margin: 0 0 10px;
+      color: var(--changelog-muted);
+      font-size: 0.88rem;
+    }
+
+    .timeline-tag {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-bottom: 12px;
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: rgba(92, 124, 255, 0.13);
+      color: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .timeline-card h2 {
+      margin: 0;
+      font-size: clamp(1.25rem, 2.5vw, 1.9rem);
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+    }
+
+    .timeline-card p {
+      margin: 14px 0 0;
+      color: var(--changelog-muted);
+      line-height: 1.65;
+    }
+
+    .timeline-detail {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.24s ease;
+    }
+
+    .timeline-detail > div {
+      overflow: hidden;
+    }
+
+    .timeline-card.is-open .timeline-detail {
+      grid-template-rows: 1fr;
+    }
+
+    .timeline-detail ul {
+      margin: 16px 0 0;
+      padding-left: 20px;
+      color: var(--changelog-muted);
+      line-height: 1.7;
+    }
+
+    .timeline-hint {
+      margin-top: 16px;
+      font-size: 0.86rem;
+      opacity: 0.72;
+    }
+
+    .changelog-footer {
+      margin-top: 36px;
+      padding: 18px;
+      text-align: center;
+      color: var(--changelog-muted);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 780px) {
+      .changelog-topbar {
+        align-items: flex-start;
+      }
+
+      .changelog-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .changelog-controls {
+        align-items: flex-start;
+      }
+
+      .timeline-wrap::before {
+        left: 27px;
+      }
+
+      .timeline-item {
+        grid-template-columns: 54px minmax(0, 1fr);
+      }
+
+      .timeline-item:nth-child(odd) .timeline-card,
+      .timeline-item:nth-child(even) .timeline-card {
+        grid-column: 2;
+        transform-origin: left center;
+      }
+
+      .timeline-item:nth-child(odd) .timeline-dot,
+      .timeline-item:nth-child(even) .timeline-dot {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .changelog-zoom {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .changelog-zoom input {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="changelog-shell">
+    <div class="changelog-topbar">
+      <a class="changelog-back" href="apps.html" aria-label="Zpět na Apps">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Zpět na Apps
+      </a>
+    </div>
+
+    <section class="changelog-hero">
+      <p class="eyebrow">Changelog</p>
+      <h1>Historie změn webu</h1>
+      <p>
+        Přehled větších úprav, nasazení a technických rozhodnutí. Stránka zatím není
+        odkazovaná z hlavní navigace — slouží jako interní stopa vývoje.
+      </p>
+
+      <div class="changelog-stats" aria-label="Souhrn změn">
+        <div class="changelog-stat">
+          <strong>1</strong>
+          <span>napojená doména</span>
+        </div>
+        <div class="changelog-stat">
+          <strong>1</strong>
+          <span>funkční projekt</span>
+        </div>
+        <div class="changelog-stat">
+          <strong>5</strong>
+          <span>zaznamenaných milníků</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="changelog-controls" aria-label="Ovládání changelogu">
+      <div class="changelog-filters" aria-label="Filtr typu změny">
+        <button class="changelog-filter is-active" type="button" data-filter="all">Vše</button>
+        <button class="changelog-filter" type="button" data-filter="Deploy">Deploy</button>
+        <button class="changelog-filter" type="button" data-filter="Content">Content</button>
+        <button class="changelog-filter" type="button" data-filter="Structure">Structure</button>
+        <button class="changelog-filter" type="button" data-filter="Maintenance">Maintenance</button>
+      </div>
+
+      <label class="changelog-zoom">
+        Zoom timeline
+        <input id="timelineZoom" type="range" min="85" max="115" value="100" step="5">
+      </label>
+    </section>
+
+    <section class="timeline-wrap" aria-label="Timeline změn">
+      <article class="timeline-item" data-type="Maintenance">
+        <div class="timeline-dot">05</div>
+        <div class="timeline-card" tabindex="0" role="button" aria-expanded="false">
+          <p class="timeline-date">Červen 2026</p>
+          <span class="timeline-tag">Maintenance</span>
+          <h2>Technický úklid repozitáře</h2>
+          <p>Doplněny základní provozní soubory pro dlouhodobější správu webu.</p>
+          <div class="timeline-detail">
+            <div>
+              <ul>
+                <li>README.md popisuje strukturu, workflow a DNS nastavení.</li>
+                <li>.gitignore chrání před commitem záloh, exportů a dočasných souborů.</li>
+                <li>.nojekyll drží GitHub Pages v jednoduchém statickém režimu.</li>
+              </ul>
+              <p class="timeline-hint">Kliknutím kartu zase sbalíš.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="timeline-item" data-type="Structure">
+        <div class="timeline-dot">04</div>
+        <div class="timeline-card" tabindex="0" role="button" aria-expanded="false">
+          <p class="timeline-date">Červen 2026</p>
+          <span class="timeline-tag">Structure</span>
+          <h2>Vznik pracovní sekce Lab</h2>
+          <p>Root domény zůstává neutrální. Skutečný obsah webu je posunutý pod /lab/.</p>
+          <div class="timeline-detail">
+            <div>
+              <ul>
+                <li>ondrejfila.cz/ slouží jako minimalistický placeholder.</li>
+                <li>ondrejfila.cz/lab/ obsahuje osobní web Drak.</li>
+                <li>Sekce není aktivně propagovaná, ale není technicky zabezpečená.</li>
+              </ul>
+              <p class="timeline-hint">Kliknutím kartu zase sbalíš.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="timeline-item" data-type="Content">
+        <div class="timeline-dot">03</div>
+        <div class="timeline-card" tabindex="0" role="button" aria-expanded="false">
+          <p class="timeline-date">Červen 2026</p>
+          <span class="timeline-tag">Content</span>
+          <h2>Přidán Rodokmen</h2>
+          <p>Do Apps byl přidán první reálně funkční projekt.</p>
+          <div class="timeline-detail">
+            <div>
+              <ul>
+                <li>Rodokmen běží jako klientská HTML aplikace.</li>
+                <li>Data zůstávají lokálně v prohlížeči přes localStorage.</li>
+                <li>Odkaz z Apps vede na /lab/projekty/rodokmen/.</li>
+              </ul>
+              <p class="timeline-hint">Kliknutím kartu zase sbalíš.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="timeline-item" data-type="Deploy">
+        <div class="timeline-dot">02</div>
+        <div class="timeline-card" tabindex="0" role="button" aria-expanded="false">
+          <p class="timeline-date">Červen 2026</p>
+          <span class="timeline-tag">Deploy</span>
+          <h2>Doména napojena na GitHub Pages</h2>
+          <p>Doména ondrejfila.cz byla propojena s repozitářem Fifin47/web.</p>
+          <div class="timeline-detail">
+            <div>
+              <ul>
+                <li>DNS u Forpsi míří přes A záznamy na GitHub Pages.</li>
+                <li>www varianta používá CNAME na fifin47.github.io.</li>
+                <li>GitHub Pages custom domain prošla DNS kontrolou.</li>
+              </ul>
+              <p class="timeline-hint">Kliknutím kartu zase sbalíš.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="timeline-item" data-type="Deploy">
+        <div class="timeline-dot">01</div>
+        <div class="timeline-card" tabindex="0" role="button" aria-expanded="false">
+          <p class="timeline-date">Červen 2026</p>
+          <span class="timeline-tag">Deploy</span>
+          <h2>První nasazení webu</h2>
+          <p>Statický web byl publikovaný přes GitHub Pages z větve main.</p>
+          <div class="timeline-detail">
+            <div>
+              <ul>
+                <li>Produkční workflow je jednoduché: commit a push do main.</li>
+                <li>GitHub Pages publikuje přímo z rootu repozitáře.</li>
+                <li>HTTPS je vynucené přes nastavení GitHub Pages.</li>
+              </ul>
+              <p class="timeline-hint">Kliknutím kartu zase sbalíš.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <p class="changelog-footer">
+      Built as a small static timeline. No backend, no framework, just HTML, CSS and a little JavaScript.
+    </p>
+  </main>
+
+  <script>
+    const root = document.documentElement;
+    const zoom = document.querySelector("#timelineZoom");
+    const filters = document.querySelectorAll(".changelog-filter");
+    const items = document.querySelectorAll(".timeline-item");
+    const cards = document.querySelectorAll(".timeline-card");
+
+    zoom?.addEventListener("input", (event) => {
+      const value = Number(event.target.value) / 100;
+      root.style.setProperty("--changelog-scale", value.toString());
+    });
+
+    filters.forEach((button) => {
+      button.addEventListener("click", () => {
+        const filter = button.dataset.filter;
+
+        filters.forEach((item) => item.classList.remove("is-active"));
+        button.classList.add("is-active");
+
+        items.forEach((item) => {
+          const shouldShow = filter === "all" || item.dataset.type === filter;
+          item.classList.toggle("is-hidden", !shouldShow);
+        });
+      });
+    });
+
+    cards.forEach((card) => {
+      const toggle = () => {
+        const isOpen = card.classList.toggle("is-open");
+        card.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      };
+
+      card.addEventListener("click", toggle);
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
